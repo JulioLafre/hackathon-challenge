@@ -14,6 +14,8 @@ executavel quando a API existir; este documento define o recorte inicial.
 
 Erros usam o objeto `error` com `code`, `message`, `details` e `request_id`.
 Codigos de dominio iniciais: `INVALID_CREDENTIALS`, `FORBIDDEN`,
+`INVALID_TOKEN`, `USER_INACTIVE`, `LOGIN_RATE_LIMITED`, `NOT_FOUND`,
+`VALIDATION_ERROR`,
 `DOCUMENTS_PENDING`, `ACADEMIC_CONFLICT`, `SUPERVISION_CAPACITY_REACHED`,
 `PHYSICAL_CAPACITY_REACHED`, `CAPACITY_BELOW_COMMITTED`, `SESSION_NOT_PUBLISHABLE`,
 `SLOT_FULL`, `INVALID_MANAGEMENT_CODE`, `INVALID_STATE_TRANSITION`.
@@ -28,6 +30,41 @@ Codigos de dominio iniciais: `INVALID_CREDENTIALS`, `FORBIDDEN`,
 
 `POST /auth/login` recebe `email` e `password`. Falha usa mensagem unica, sem
 revelar se o e-mail existe.
+
+Payload de sucesso do login:
+
+```json
+{
+  "access_token": "<jwt>",
+  "token_type": "bearer",
+  "expires_in": 1800,
+  "user": {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "email": "student.demo@demo.clinicaescola.dev",
+    "role": "STUDENT",
+    "is_active": true
+  }
+}
+```
+
+O token aparece somente na resposta bem-sucedida de login e deve permanecer em
+memoria no cliente. `GET /me` retorna somente o perfil atual, sem senha, hash ou
+token:
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000000001",
+  "email": "student.demo@demo.clinicaescola.dev",
+  "role": "STUDENT",
+  "is_active": true
+}
+```
+
+Credenciais invalidas retornam `401` com `INVALID_CREDENTIALS` e a mensagem
+`E-mail ou senha inválidos.`. Token ausente, expirado ou invalido retorna
+`401 INVALID_TOKEN`; usuario desativado retorna `401 USER_INACTIVE`. Depois de
+cinco falhas por IP em quinze minutos, a proxima tentativa retorna `429
+LOGIN_RATE_LIMITED` com o header `Retry-After`.
 
 ## Academico, pessoas e recursos
 

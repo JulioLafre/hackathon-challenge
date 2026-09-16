@@ -12,6 +12,19 @@ class Settings(BaseSettings):
     )
     storage_path: Path = Path("./storage")
     environment: str = "development"
+    web_origin: str = "http://localhost:5173"
+    jwt_secret_key: str = "development-only-change-me"
+    jwt_issuer: str = "clinica-escola-api"
+    jwt_audience: str = "clinica-escola-web"
+    access_token_expires_minutes: int = 30
+    login_rate_limit_attempts: int = 5
+    login_rate_limit_window_seconds: int = 900
+    demo_master_email: str = "master.demo@demo.clinicaescola.dev"
+    demo_master_password: str = "MasterDemo!2026"
+    demo_supervisor_email: str = "supervisor.demo@demo.clinicaescola.dev"
+    demo_supervisor_password: str = "SupervisorDemo!2026"
+    demo_student_email: str = "student.demo@demo.clinicaescola.dev"
+    demo_student_password: str = "StudentDemo!2026"
 
     @field_validator("database_url")
     @classmethod

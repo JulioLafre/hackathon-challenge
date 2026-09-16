@@ -14,6 +14,8 @@ dados de prontuario ou diagnostico.
 - sem refresh token no MVP; expiracao exige novo login;
 - resposta de login invalido e identica para e-mail inexistente e senha errada;
 - usuario desativado e negado mesmo se o token ainda for valido.
+- rate limit de login em memoria por IP: cinco falhas em quinze minutos e a
+  proxima tentativa recebe `429` com `Retry-After`;
 
 Segredos ficam em variaveis de ambiente. `.env.example` nao contem segredo real.
 HTTPS e obrigatorio fora do ambiente local.

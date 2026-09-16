@@ -1,6 +1,6 @@
 # SPEC-001 - Autenticacao e acesso
 
-Status: READY
+Status: IMPLEMENTED
 
 ## Objetivo
 

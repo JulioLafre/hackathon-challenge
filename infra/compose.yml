@@ -24,6 +24,19 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://clinica:clinica_dev_only@db:5432/clinica_escola}
       STORAGE_PATH: ${STORAGE_PATH:-/app/storage}
       ENVIRONMENT: ${ENVIRONMENT:-development}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-development-only-change-me}
+      JWT_ISSUER: ${JWT_ISSUER:-clinica-escola-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-clinica-escola-web}
+      ACCESS_TOKEN_EXPIRES_MINUTES: ${ACCESS_TOKEN_EXPIRES_MINUTES:-30}
+      LOGIN_RATE_LIMIT_ATTEMPTS: ${LOGIN_RATE_LIMIT_ATTEMPTS:-5}
+      LOGIN_RATE_LIMIT_WINDOW_SECONDS: ${LOGIN_RATE_LIMIT_WINDOW_SECONDS:-900}
+      DEMO_MASTER_EMAIL: ${DEMO_MASTER_EMAIL:-master.demo@demo.clinicaescola.dev}
+      DEMO_MASTER_PASSWORD: ${DEMO_MASTER_PASSWORD:-MasterDemo!2026}
+      DEMO_SUPERVISOR_EMAIL: ${DEMO_SUPERVISOR_EMAIL:-supervisor.demo@demo.clinicaescola.dev}
+      DEMO_SUPERVISOR_PASSWORD: ${DEMO_SUPERVISOR_PASSWORD:-SupervisorDemo!2026}
+      DEMO_STUDENT_EMAIL: ${DEMO_STUDENT_EMAIL:-student.demo@demo.clinicaescola.dev}
+      DEMO_STUDENT_PASSWORD: ${DEMO_STUDENT_PASSWORD:-StudentDemo!2026}
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:

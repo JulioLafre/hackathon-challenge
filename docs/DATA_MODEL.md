@@ -13,7 +13,7 @@ Modelo relacional inicial. Todos os IDs sao UUID, datas de auditoria usam
 
 | Tabela | Campos principais | Restricoes relevantes |
 | --- | --- | --- |
-| `users` | email, password_hash, role, is_active | email normalizado unico |
+| `users` | id, email, password_hash, role, is_active, created_at, updated_at | id UUID; e-mail normalizado unico; role `MASTER`, `SUPERVISOR` ou `STUDENT`; senha somente como hash Argon2id |
 | `students` | user_id, registration, full_name, phone | user e registration unicos |
 | `supervisors` | user_id, kind, full_name, professional_area, max_students_default | kind em `PROFESSOR`, `PRECEPTOR`; limite > 0 |
 | `student_availabilities` | student_id, term_id, weekday, start_time, end_time | inicio < fim |

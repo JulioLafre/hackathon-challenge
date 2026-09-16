@@ -73,6 +73,17 @@ curl http://localhost:8000/api/v1/health/live
 curl http://localhost:8000/api/v1/health/ready
 ```
 
+Para criar ou atualizar os tres usuarios ficticios da demonstracao, execute o
+seed idempotente depois que a API estiver saudavel:
+
+```bash
+docker compose -f infra/compose.yml exec api seed-demo
+```
+
+As credenciais demo ficam nas variaveis `DEMO_*` do ambiente local. Elas sao
+apenas para a demonstracao e devem ser substituidas antes de qualquer uso real.
+O login fica em <http://localhost:5173/login>.
+
 Os gates da API rodam no container; os gates do frontend rodam no workspace,
 porque a imagem final do frontend contem somente o build estatico:
 

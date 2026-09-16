@@ -1,4 +1,5 @@
 import { Link, Route, Routes } from 'react-router-dom'
+import { AuthProvider, LoginPage, ProtectedRoute } from './features/auth/auth'
 import './styles.css'
 
 const highlights = [
@@ -41,9 +42,9 @@ function HomePage() {
           <a href="#acesso">Acesso</a>
         </nav>
 
-        <a className="header-action" href="#acesso">
+        <Link className="header-action" to="/login">
           Entrar na plataforma <span aria-hidden="true">↗</span>
-        </a>
+        </Link>
       </header>
 
       <main id="conteudo-principal" aria-label="Apresentação">
@@ -64,9 +65,9 @@ function HomePage() {
               <a className="button button-primary" href="#como-funciona">
                 Conheça a clínica <span aria-hidden="true">↗</span>
               </a>
-              <a className="text-link" href="#acesso">
+              <Link className="text-link" to="/login">
                 Já faço parte <span aria-hidden="true">→</span>
-              </a>
+              </Link>
             </div>
           </div>
 
@@ -108,9 +109,9 @@ function HomePage() {
             <h2 id="access-title">Vamos começar?</h2>
           </div>
           <p>Entre na plataforma para acompanhar sua jornada na Clínica Escola.</p>
-          <a className="button button-light" href="mailto:clinica@exemplo.test">
-            Falar com a equipe <span aria-hidden="true">↗</span>
-          </a>
+          <Link className="button button-light" to="/login">
+            Entrar na plataforma <span aria-hidden="true">↗</span>
+          </Link>
         </section>
       </main>
 
@@ -137,9 +138,13 @@ function NotFoundPage() {
 
 export function App() {
   return (
-    <Routes>
-      <Route path="/" element={<HomePage />} />
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/app/*" element={<ProtectedRoute />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </AuthProvider>
   )
 }

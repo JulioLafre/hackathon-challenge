@@ -6,7 +6,7 @@ possuir codigo e validacao. O status so muda com evidencia.
 | Ordem | Tarefa | Depende de | Resultado demonstravel | Status |
 | --- | --- | --- | --- | --- |
 | 1 | [TASK-001](TASK-001-bootstrap.md) | - | Stack sobe e migrations/testes rodam | DONE |
-| 2 | [TASK-002](TASK-002-auth.md) | 001 | Tres papeis entram e RBAC bloqueia | TODO |
+| 2 | [TASK-002](TASK-002-auth.md) | 001 | Tres papeis entram e RBAC bloqueia | DONE |
 | 3 | [TASK-003](TASK-003-academics.md) | 002 | Semestre e grade configuraveis | TODO |
 | 4 | [TASK-004](TASK-004-clinics.md) | 003 | Clinica, recursos e servico configurados | TODO |
 | 5 | [TASK-005](TASK-005-documents.md) | 003 | Upload, revisao e bloqueio funcionam | TODO |
