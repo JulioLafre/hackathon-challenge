@@ -1,6 +1,6 @@
 # TASK-001 - Fundacao executavel
 
-Status: TODO
+Status: DONE
 
 ## Objetivo
 
@@ -31,12 +31,33 @@ tarefas.
 
 ## Criterios de aceitacao
 
-- [ ] `docker compose -f infra/compose.yml config` passa.
-- [ ] Stack sobe do zero com um unico comando documentado.
-- [ ] `/api/v1/health/live` e `/ready` respondem corretamente.
-- [ ] Migration sobe em PostgreSQL vazio.
-- [ ] Testes, lint e typecheck de ambos os apps rodam.
-- [ ] Repositorio nao contem segredo nem arquivo de storage.
+- [x] `docker compose -f infra/compose.yml config` passa (validado pelo
+  provider Docker Compose via `podman compose`, pois o binario `docker` nao esta
+  instalado no ambiente).
+- [x] Stack sobe do zero com um unico comando documentado.
+- [x] `/api/v1/health/live` e `/ready` respondem corretamente.
+- [x] Migration sobe em PostgreSQL vazio.
+- [x] Testes, lint e typecheck de ambos os apps rodam.
+- [x] Repositorio nao contem segredo nem arquivo de storage.
+
+## Evidencia de validacao
+
+- `podman compose -f infra/compose.yml config`: passou pelo provider Docker
+  Compose disponivel no ambiente;
+- `podman compose -f infra/compose.yml up -d --build`: passou; `db`, `api` e
+  `web` subiram e ficaram `healthy`;
+- `curl http://127.0.0.1:8000/api/v1/health/live`: `200` com `{"status":"ok"}`;
+- `curl http://127.0.0.1:8000/api/v1/health/ready`: `200` com banco e storage
+  `ok`;
+- `podman compose -f infra/compose.yml exec -T api alembic upgrade head`:
+  passou; PostgreSQL vazio criou `alembic_version` e `app_metadata`;
+- `podman compose -f infra/compose.yml exec -T api pytest`: 5 passaram;
+- `podman compose -f infra/compose.yml exec -T api ruff check .`: passou;
+- `podman compose -f infra/compose.yml exec -T api mypy app`: passou;
+- `npm --prefix apps/web run lint`: passou;
+- `npm --prefix apps/web run typecheck`: passou;
+- `npm --prefix apps/web test -- --run`: 2 passaram;
+- `npm --prefix apps/web run build`: passou.
 
 ## Validacao minima
 

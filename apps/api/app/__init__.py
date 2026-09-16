@@ -1,0 +1,1 @@
+"""Clinica Escola API package."""

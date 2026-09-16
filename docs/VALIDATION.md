@@ -18,13 +18,17 @@ docker compose -f infra/compose.yml exec api alembic upgrade head
 docker compose -f infra/compose.yml exec api pytest
 docker compose -f infra/compose.yml exec api ruff check .
 docker compose -f infra/compose.yml exec api mypy app
-docker compose -f infra/compose.yml exec web npm run lint
-docker compose -f infra/compose.yml exec web npm run typecheck
-docker compose -f infra/compose.yml exec web npm test -- --run
+npm --prefix apps/web run lint
+npm --prefix apps/web run typecheck
+npm --prefix apps/web test -- --run
 ```
 
-Os nomes finais dos scripts devem ser consolidados pela `TASK-001`. Ate la,
-esses comandos representam o contrato desejado, nao testes ja executados.
+Os tres comandos do frontend rodam no workspace, porque a imagem final do
+servico `web` contem somente os arquivos compilados e o Nginx; o `npm run build`
+correspondente ja e executado no estagio Node durante o `docker compose up`.
+
+Os comandos abaixo sao o contrato consolidado pela `TASK-001` para os gates
+locais e do Compose.
 
 ## Matriz de rastreabilidade
 

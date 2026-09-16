@@ -113,6 +113,8 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/
@@ -150,3 +152,16 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# JavaScript and Vite
+node_modules/
+*.tsbuildinfo
+.vite/
+coverage/
+
+# Development storage
+storage/
+
+# Editors and OS files
+.DS_Store
+.vscode/

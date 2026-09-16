@@ -54,6 +54,40 @@ contratos ou regras devem atualizar primeiro a documentacao correspondente.
 O chatbot nao pertence ao caminho critico do MVP. Ele so deve ser iniciado
 depois que essa demonstracao estiver estavel.
 
+## Executar a fundacao
+
+Com Docker Compose instalado, a stack completa sobe com um unico comando:
+
+```bash
+cp .env.example .env
+docker compose -f infra/compose.yml up -d --build
+```
+
+O comando inicia PostgreSQL, aplica a migration inicial antes de iniciar a API
+e serve o frontend compilado pelo Nginx. Os healthchecks dos tres servicos
+podem ser conferidos com:
+
+```bash
+docker compose -f infra/compose.yml ps
+curl http://localhost:8000/api/v1/health/live
+curl http://localhost:8000/api/v1/health/ready
+```
+
+Os gates da API rodam no container; os gates do frontend rodam no workspace,
+porque a imagem final do frontend contem somente o build estatico:
+
+```bash
+docker compose -f infra/compose.yml exec api alembic upgrade head
+docker compose -f infra/compose.yml exec api pytest
+docker compose -f infra/compose.yml exec api ruff check .
+docker compose -f infra/compose.yml exec api mypy app
+npm --prefix apps/web ci
+npm --prefix apps/web run lint
+npm --prefix apps/web run typecheck
+npm --prefix apps/web test -- --run
+npm --prefix apps/web run build
+```
+
 ## Assistencia do Codex
 
 As skills versionadas ficam em `.agents/skills/`, com origens e hashes em

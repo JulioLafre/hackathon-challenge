@@ -91,6 +91,17 @@ supervisor, hash ou dados de outras reservas.
 - `GET /health/live`: processo vivo;
 - `GET /health/ready`: banco e storage disponiveis.
 
+Os health endpoints sao publicos e retornam payloads pequenos, sem detalhes de
+infraestrutura ou credenciais:
+
+- `GET /health/live` retorna `200` e `{"status":"ok"}` quando o processo esta
+  respondendo;
+- `GET /health/ready` retorna `200` com `{"status":"ok","checks":{"database":"ok",
+  "storage":"ok"}}` quando banco e storage estao disponiveis;
+- `GET /health/ready` retorna `503` com o mesmo formato, usando
+  `"status":"error"` e `"error"` no check indisponivel, quando a aplicacao nao
+  esta pronta para receber trafego.
+
 ## Regras de autorizacao de objeto
 
 Toda rota que recebe ID carrega o objeto e verifica propriedade/escopo antes da

@@ -3,6 +3,12 @@
 Modelo relacional inicial. Todos os IDs sao UUID, datas de auditoria usam
 `timestamptz` e tabelas mutaveis possuem `created_at` e `updated_at`.
 
+## Infraestrutura
+
+| Tabela | Campos principais | Restricoes relevantes |
+| --- | --- | --- |
+| `app_metadata` | key, value, created_at, updated_at | `key` e chave primaria; usada somente para metadados da infraestrutura |
+
 ## Identidade e pessoas
 
 | Tabela | Campos principais | Restricoes relevantes |
