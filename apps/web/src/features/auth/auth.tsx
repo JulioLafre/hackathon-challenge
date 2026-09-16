@@ -7,6 +7,9 @@ import {
   type ReactNode,
 } from 'react'
 import { Link, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { AcademicAdminPage, AvailabilityPage } from '../academics/academics'
+import { ClinicAdminPage } from '../clinics/clinics'
+import { StudentDocumentsPage, SupervisorDocumentsPage } from '../documents/documents'
 
 export type UserRole = 'MASTER' | 'SUPERVISOR' | 'STUDENT'
 
@@ -192,7 +195,7 @@ function sectionPath(label: string) {
 }
 
 function PrivateShell() {
-  const { user, logout } = useAuth()
+  const { user, logout, token } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -208,6 +211,18 @@ function PrivateShell() {
     logout()
     navigate('/login')
   }
+
+  const customPage = token && user.role === 'MASTER' && location.pathname === '/app/semestres'
+    ? <AcademicAdminPage token={token} />
+    : token && user.role === 'MASTER' && location.pathname === '/app/clinicas'
+      ? <ClinicAdminPage token={token} />
+      : token && (user.role === 'STUDENT' || user.role === 'SUPERVISOR') && location.pathname === '/app/minha-disponibilidade'
+      ? <AvailabilityPage token={token} />
+      : token && user.role === 'STUDENT' && location.pathname === '/app/documentos'
+        ? <StudentDocumentsPage token={token} />
+        : token && user.role === 'SUPERVISOR' && location.pathname === '/app/documentos'
+          ? <SupervisorDocumentsPage token={token} />
+      : null
 
   return (
     <div className="private-shell">
@@ -233,13 +248,34 @@ function PrivateShell() {
               {item}
             </NavLink>
           ))}
+          {user.role === 'MASTER' && (
+            <NavLink
+              className={({ isActive }) => (isActive ? 'private-nav-link active' : 'private-nav-link')}
+              to='/app/clinicas'
+            >
+              <span aria-hidden='true' className='nav-marker' />
+              Clinicas
+            </NavLink>
+          )}
+          {(user.role === 'STUDENT' || user.role === 'SUPERVISOR') && (
+            <NavLink
+              className={({ isActive }) => (isActive ? 'private-nav-link active' : 'private-nav-link')}
+              to='/app/minha-disponibilidade'
+            >
+              <span aria-hidden='true' className='nav-marker' />
+              Minha disponibilidade
+            </NavLink>
+          )}
         </nav>
         <button className="logout-button" type="button" onClick={handleLogout}>
           Sair <span aria-hidden="true">↗</span>
         </button>
       </aside>
 
-      <main className="private-main" aria-labelledby="private-title">
+      <main
+        className="private-main"
+        aria-labelledby={customPage ? (location.pathname === '/app/semestres' ? 'academic-page-title' : location.pathname === '/app/clinicas' ? 'clinic-page-title' : 'availability-page-title') : 'private-title'}
+      >
         <header className="private-header">
           <div>
             <p className="eyebrow">Área interna</p>
@@ -253,7 +289,8 @@ function PrivateShell() {
           </div>
         </header>
 
-        <section className="private-content">
+        {customPage}
+        {!customPage && <section className="private-content">
           <p className="eyebrow">Clínica Escola</p>
           <h1 id="private-title">{activeItem}</h1>
           <p className="private-intro">
@@ -271,7 +308,7 @@ function PrivateShell() {
               <p>As informações da sua rotina aparecerão aqui conforme o semestre avançar.</p>
             </article>
           </div>
-        </section>
+        </section>}
       </main>
     </div>
   )

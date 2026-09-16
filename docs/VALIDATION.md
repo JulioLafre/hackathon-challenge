@@ -38,6 +38,8 @@ locais e do Compose.
 | RF-05, BR-011 | Integracao | Documento pendente bloqueia alocacao |
 | RF-07, BR-030 | Unitario + integracao | Supervisor no limite rejeita novo estudante |
 | RF-08, BR-021 | Unitario | Sobreposicao academica parcial e total |
+| TASK-003 | Integracao PostgreSQL | Exclusividade de semestre, RBAC, fuso institucional, intervalos adjacentes e conflito |
+| TASK-004 | Integracao PostgreSQL + componente | Isolamento por semestre, constraints positivas, referencias inativas, RBAC Master, seed idempotente e formularios |
 | RF-09, BR-040 | Unitario | Cada fator e isoladamente o gargalo |
 | BR-042 | Unitario | Geracao com sobra menor que a duracao |
 | RF-13, BR-050 | Integracao concorrente | Duas transacoes disputam ultima vaga |
@@ -47,6 +49,18 @@ locais e do Compose.
 | RNF-02 | Componente/manual | 360 px, tablet e desktop sem overflow |
 | RNF-05 | Componente/manual | Teclado, foco, labels e contraste |
 | RNF-06 | Integracao | Rate limit, upload invalido e erro sanitizado |
+
+Para a TASK-003, a validacao executada foi reduzida aos pontos criticos da
+fatia: migration `0003_academics`, ativacao exclusiva e preservacao historica,
+RBAC de estudante, compatibilidade de vinculo, conflito `[inicio, fim)`, fuso
+fixo, disponibilidade propria, testes de componente, typecheck, lint e build.
+
+Para a TASK-004, a validacao executada foi reduzida aos pontos criticos da
+fatia: migration `0004_clinics` com downgrade/upgrade, testes PostgreSQL de
+clinicas com regressao academica e auth, Ruff, mypy, teste de componente da
+configuracao Master, typecheck, lint, build e duas execucoes do seed em banco
+limpo. Nao foram executados testes de sessoes/capacidade efetiva porque esses
+fluxos ainda nao fazem parte da tarefa.
 
 ## Teste de concorrencia critico
 

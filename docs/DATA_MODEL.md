@@ -16,8 +16,8 @@ Modelo relacional inicial. Todos os IDs sao UUID, datas de auditoria usam
 | `users` | id, email, password_hash, role, is_active, created_at, updated_at | id UUID; e-mail normalizado unico; role `MASTER`, `SUPERVISOR` ou `STUDENT`; senha somente como hash Argon2id |
 | `students` | user_id, registration, full_name, phone | user e registration unicos |
 | `supervisors` | user_id, kind, full_name, professional_area, max_students_default | kind em `PROFESSOR`, `PRECEPTOR`; limite > 0 |
-| `student_availabilities` | student_id, term_id, weekday, start_time, end_time | inicio < fim |
-| `supervisor_availabilities` | supervisor_id, term_id, weekday, start_time, end_time | inicio < fim |
+| `student_availabilities` | id, student_id, term_id, weekday, start_time, end_time, time_zone | inicio < fim; fuso institucional |
+| `supervisor_availabilities` | id, supervisor_id, term_id, weekday, start_time, end_time, time_zone | inicio < fim; fuso institucional |
 
 Contato da comunidade nao cria `user`; pertence ao agendamento.
 
@@ -25,12 +25,19 @@ Contato da comunidade nao cria `user`; pertence ao agendamento.
 
 | Tabela | Campos principais | Restricoes relevantes |
 | --- | --- | --- |
-| `academic_terms` | name, starts_on, ends_on, status | nome unico; no maximo um `ACTIVE` |
+| `academic_terms` | name, starts_on, ends_on, status | datas crescentes; status `DRAFT`, `ACTIVE`, `CLOSED`; no maximo um `ACTIVE` |
 | `courses` | name, code, is_active | code unico |
 | `disciplines` | course_id, name, code, kind, is_active | code unico; kind `DISCIPLINE` ou `INTERNSHIP` |
-| `cohorts` | term_id, course_id, period, label | combinacao unica no semestre |
-| `student_academic_links` | student_id, term_id, cohort_id, discipline_id | combinacao unica |
-| `class_blocks` | cohort_id, discipline_id opcional, weekday, start_time, end_time | inicio < fim |
+| `cohorts` | term_id, course_id, period, label, is_active | combinacao unica no semestre; periodo > 0 |
+| `student_academic_links` | id, student_id, term_id, cohort_id, discipline_id | combinacao unica; turma e disciplina devem ser compativeis |
+| `class_blocks` | id, cohort_id, discipline_id opcional, weekday, start_time, end_time, time_zone, is_active | dia 0-6; inicio < fim; fuso institucional |
+
+Datas de semestre sao `date`; horarios recorrentes sao `time` no fuso
+`America/Sao_Paulo`. A aplicacao valida sobreposicao usando intervalos
+semiabertos `[inicio, fim)`, permitindo que um intervalo comece exatamente no
+fim do anterior. Relacionamentos usam `RESTRICT`/preservacao logica para que
+encerrar um semestre nao apague vinculos academicos nem disponibilidades
+historicas.
 
 ## Documentos
 
@@ -38,9 +45,13 @@ Contato da comunidade nao cria `user`; pertence ao agendamento.
 | --- | --- | --- |
 | `document_requirements` | term_id, discipline_id opcional, name, expires_required, is_active | nome unico no escopo |
 | `document_submissions` | requirement_id, student_id, storage_key, original_name, mime_type, size_bytes, status, expires_at, review_note, reviewed_by, reviewed_at | `storage_key` unico; status controlado |
+| `audit_events` | actor_user_id opcional, action, target_type, target_id, occurred_at, metadata_json | append-only; metadata sem PII, nota ou conteudo de arquivo |
 
 `document_submissions` e historica: reenvio cria linha nova. Uma consulta seleciona
-a submissao mais recente/valida para definir elegibilidade.
+a submissao aprovada e nao expirada para definir elegibilidade; o checklist
+mostra a submissao mais recente. Estados permitidos sao `PENDING_REVIEW`,
+`APPROVED`, `REJECTED` e `EXPIRED`. O storage key e gerado pelo servidor e o
+volume fica fora da raiz publica.
 
 ## Clinicas, servicos e recursos
 
@@ -49,12 +60,19 @@ a submissao mais recente/valida para definir elegibilidade.
 | `clinics` | name, address_label, is_active | nome unico |
 | `environments` | clinic_id, name, is_active | nome unico por clinica |
 | `rooms` | environment_id, name, is_active | nome unico por ambiente |
-| `equipment_types` | name | nome unico |
+| `equipment_types` | name, is_active | nome unico; desativacao logica |
 | `environment_equipments` | environment_id, equipment_type_id, quantity, is_active | quantidade >= 0; tipo unico por ambiente |
 | `clinic_term_configs` | clinic_id, term_id, max_simultaneous_appointments, max_students | limites > 0; unico por clinica/semestre |
 | `services` | discipline_id, name, duration_minutes, is_active | duracao > 0 |
 | `service_equipment_requirements` | service_id, equipment_type_id, units_per_appointment | unidades > 0; tipo unico por servico |
-| `supervisor_service_scopes` | supervisor_id, term_id, service_id, environment_id, can_review_documents, max_students_override | escopo unico; limite opcional > 0 |
+| `supervisor_service_scopes` | supervisor_id, term_id, service_id, environment_id, can_review_documents, max_students_override, is_active | escopo unico; limite opcional > 0; desativacao logica |
+
+Todos os relacionamentos de configuracao usam FK `RESTRICT`. A API valida que
+clinica, ambiente, disciplina/curso, equipamento, servico e supervisor estejam
+ativos antes de criar uma nova relacao. `environment_equipments.quantity` pode
+ser zero; limites da clinica, duracao do servico, unidades por atendimento e
+override do escopo devem ser positivos. `clinic_term_configs` e escopos sempre
+referenciam um semestre, mantendo a configuracao isolada por `term_id`.
 
 ## Sessoes e agendamentos
 

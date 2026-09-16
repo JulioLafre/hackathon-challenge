@@ -6,8 +6,11 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes.academics import router as academics_router
 from app.api.routes.auth import me_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.clinics import router as clinics_router
+from app.api.routes.documents import router as documents_router
 from app.api.routes.health import router as health_router
 from app.core.config import Settings, get_settings
 from app.core.errors import ApiError, api_error_handler, validation_error_handler
@@ -44,7 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=[resolved_settings.web_origin],
         allow_credentials=False,
-        allow_methods=["GET", "POST"],
+        allow_methods=['GET', 'POST', 'PATCH', 'PUT'],
         allow_headers=["Authorization", "Content-Type"],
     )
 
@@ -60,6 +63,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(me_router, prefix="/api/v1")
+    app.include_router(academics_router, prefix="/api/v1")
+    app.include_router(clinics_router, prefix="/api/v1")
+    app.include_router(documents_router, prefix='/api/v1')
     return app
 
 

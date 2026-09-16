@@ -81,3 +81,12 @@ documentos e eventos de auditoria.
 
 Prazo real de retencao e tipos documentais serao configurados pela instituicao;
 o seed usa exemplos ficticios.
+
+## Decisao de integracao entre tarefas
+
+A TASK-005 entrega a consulta StudentEligibility e os estados necessarios
+para que o motor de sessoes consuma a elegibilidade sem duplicar regra. A
+suspensao de alocacoes e a sinalizacao de reservas serao implementadas nas
+TASK-006/TASK-007, pois essas entidades ainda nao existem no modelo atual.
+Enquanto essas tarefas nao forem concluidas, nao ha alocacao ou reserva que
+possa ser suspensa por expiracao.

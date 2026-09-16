@@ -5,7 +5,7 @@ import pytest
 import pytest_asyncio
 from fastapi import APIRouter, Depends
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, select
+from sqlalchemy import select, text
 
 from app.core.config import get_settings
 from app.core.errors import ApiError
@@ -34,7 +34,12 @@ async def auth_client() -> AsyncClient:
     session_factory = create_session_factory(app.state.engine)
 
     async with session_factory() as session:
-        await session.execute(delete(User))
+        await session.execute(
+            text(
+                'TRUNCATE academic_terms, courses, users, app_metadata '
+                'RESTART IDENTITY CASCADE'
+            )
+        )
         await session.commit()
 
     async with AsyncClient(
