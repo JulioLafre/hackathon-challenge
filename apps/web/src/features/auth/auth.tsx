@@ -10,6 +10,9 @@ import { Link, NavLink, Navigate, useLocation, useNavigate } from 'react-router-
 import { AcademicAdminPage, AvailabilityPage } from '../academics/academics'
 import { ClinicAdminPage } from '../clinics/clinics'
 import { StudentDocumentsPage, SupervisorDocumentsPage } from '../documents/documents'
+import { SchedulingPage } from '../scheduling/scheduling'
+import { AdminAuditPage, AdminDashboardPage } from '../admin/admin'
+import { RoleJourney, RoleStartPage, StudentJourneyPage } from '../journey/journey'
 
 export type UserRole = 'MASTER' | 'SUPERVISOR' | 'STUDENT'
 
@@ -51,10 +54,28 @@ const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1').
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
-const roleNavigation: Record<UserRole, readonly string[]> = {
-  MASTER: ['Visão geral', 'Semestres', 'Usuários', 'Auditoria'],
-  SUPERVISOR: ['Minhas sessões', 'Estudantes', 'Documentos'],
-  STUDENT: ['Minha jornada', 'Documentos', 'Minhas alocações'],
+type NavigationItem = {
+  label: string
+  path: string
+}
+
+const roleNavigation: Record<UserRole, readonly NavigationItem[]> = {
+  MASTER: [
+    { label: 'Visão geral', path: '/app/visao-geral' },
+    { label: 'Semestres', path: '/app/semestres' },
+    { label: 'Clínicas', path: '/app/clinicas' },
+    { label: 'Auditoria', path: '/app/auditoria' },
+  ],
+  SUPERVISOR: [
+    { label: 'Minha disponibilidade', path: '/app/minha-disponibilidade' },
+    { label: 'Minhas sessões', path: '/app/sessoes' },
+    { label: 'Documentos', path: '/app/documentos' },
+  ],
+  STUDENT: [
+    { label: 'Documentos', path: '/app/documentos' },
+    { label: 'Minha disponibilidade', path: '/app/minha-disponibilidade' },
+    { label: 'Minha jornada', path: '/app/minha-jornada' },
+  ],
 }
 
 const roleLabels: Record<UserRole, string> = {
@@ -190,10 +211,6 @@ export function LoginPage() {
   )
 }
 
-function sectionPath(label: string) {
-  return `/app/${label.toLowerCase().replaceAll(' ', '-')}`
-}
-
 function PrivateShell() {
   const { user, logout, token } = useAuth()
   const navigate = useNavigate()
@@ -204,8 +221,6 @@ function PrivateShell() {
   }
 
   const navigation = roleNavigation[user.role]
-  const activeItem =
-    navigation.find((item) => location.pathname === sectionPath(item)) ?? navigation[0]
 
   function handleLogout() {
     logout()
@@ -220,9 +235,33 @@ function PrivateShell() {
       ? <AvailabilityPage token={token} />
       : token && user.role === 'STUDENT' && location.pathname === '/app/documentos'
         ? <StudentDocumentsPage token={token} />
-        : token && user.role === 'SUPERVISOR' && location.pathname === '/app/documentos'
+      : token && user.role === 'SUPERVISOR' && location.pathname === '/app/documentos'
           ? <SupervisorDocumentsPage token={token} />
+      : token && user.role === 'SUPERVISOR' && location.pathname === '/app/sessoes'
+        ? <SchedulingPage token={token} />
+      : token && user.role === 'STUDENT' && location.pathname === '/app/minha-jornada'
+        ? <StudentJourneyPage />
+      : token && user.role === 'MASTER' && location.pathname === '/app/auditoria'
+        ? <AdminAuditPage token={token} />
+      : token && user.role === 'MASTER' && location.pathname === '/app/visao-geral'
+        ? <AdminDashboardPage token={token} />
       : null
+
+  const mainTitleId = customPage
+    ? location.pathname === '/app/semestres'
+      ? 'academic-page-title'
+      : location.pathname === '/app/clinicas'
+        ? 'clinic-page-title'
+        : location.pathname === '/app/sessoes'
+          ? 'scheduling-page-title'
+          : location.pathname === '/app/visao-geral'
+            ? 'admin-page-title'
+            : location.pathname === '/app/auditoria'
+              ? 'audit-page-title'
+              : location.pathname === '/app/minha-jornada'
+                ? 'student-journey-page-title'
+                : 'availability-page-title'
+    : 'private-title'
 
   return (
     <div className="private-shell">
@@ -235,37 +274,19 @@ function PrivateShell() {
             Clínica <strong>Escola</strong>
           </span>
         </Link>
-        <div className="sidebar-label">Seu espaço</div>
+        <div className="sidebar-label">Seu fluxo</div>
         <nav aria-label="Navegação da plataforma" className="private-nav">
           {navigation.map((item) => (
             <NavLink
               className={({ isActive }) => (isActive ? 'private-nav-link active' : 'private-nav-link')}
-              end={item === navigation[0]}
-              key={item}
-              to={sectionPath(item)}
+              end={item.path === '/app/visao-geral' || item.path === '/app/minha-jornada'}
+              key={item.path}
+              to={item.path}
             >
               <span aria-hidden="true" className="nav-marker" />
-              {item}
+              {item.label}
             </NavLink>
           ))}
-          {user.role === 'MASTER' && (
-            <NavLink
-              className={({ isActive }) => (isActive ? 'private-nav-link active' : 'private-nav-link')}
-              to='/app/clinicas'
-            >
-              <span aria-hidden='true' className='nav-marker' />
-              Clinicas
-            </NavLink>
-          )}
-          {(user.role === 'STUDENT' || user.role === 'SUPERVISOR') && (
-            <NavLink
-              className={({ isActive }) => (isActive ? 'private-nav-link active' : 'private-nav-link')}
-              to='/app/minha-disponibilidade'
-            >
-              <span aria-hidden='true' className='nav-marker' />
-              Minha disponibilidade
-            </NavLink>
-          )}
         </nav>
         <button className="logout-button" type="button" onClick={handleLogout}>
           Sair <span aria-hidden="true">↗</span>
@@ -274,7 +295,7 @@ function PrivateShell() {
 
       <main
         className="private-main"
-        aria-labelledby={customPage ? (location.pathname === '/app/semestres' ? 'academic-page-title' : location.pathname === '/app/clinicas' ? 'clinic-page-title' : 'availability-page-title') : 'private-title'}
+        aria-labelledby={mainTitleId}
       >
         <header className="private-header">
           <div>
@@ -289,26 +310,9 @@ function PrivateShell() {
           </div>
         </header>
 
+        <RoleJourney role={user.role} />
         {customPage}
-        {!customPage && <section className="private-content">
-          <p className="eyebrow">Clínica Escola</p>
-          <h1 id="private-title">{activeItem}</h1>
-          <p className="private-intro">
-            Um panorama simples para você acompanhar o próximo passo da sua jornada.
-          </p>
-          <div className="private-card-grid">
-            <article className="private-card private-card-accent">
-              <span className="card-number">01</span>
-              <h2>Acesso seguro</h2>
-              <p>Seu perfil mostra somente as funções disponíveis para o seu papel.</p>
-            </article>
-            <article className="private-card">
-              <span className="card-number">02</span>
-              <h2>Próximos passos</h2>
-              <p>As informações da sua rotina aparecerão aqui conforme o semestre avançar.</p>
-            </article>
-          </div>
-        </section>}
+        {!customPage && <RoleStartPage role={user.role} />}
       </main>
     </div>
   )

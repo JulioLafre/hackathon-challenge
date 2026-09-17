@@ -10,9 +10,9 @@ possuir codigo e validacao. O status so muda com evidencia.
 | 3 | [TASK-003](TASK-003-academics.md) | 002 | Semestre e grade configuraveis | DONE |
 | 4 | [TASK-004](TASK-004-clinics.md) | 003 | Clinica, recursos e servico configurados | DONE |
 | 5 | [TASK-005](TASK-005-documents.md) | 003 | Upload, revisao e bloqueio funcionam | DONE |
-| 6 | [TASK-006](TASK-006-scheduling.md) | 004, 005 | Sessao publica somente capacidade real | TODO |
-| 7 | [TASK-007](TASK-007-booking.md) | 006 | Comunidade reserva sem exceder limite | TODO |
-| 8 | [TASK-008](TASK-008-demo-hardening.md) | 007 | Painel, seed, seguranca e roteiro estaveis | TODO |
+| 6 | [TASK-006](TASK-006-scheduling.md) | 004, 005 | Sessao publica somente capacidade real | DONE |
+| 7 | [TASK-007](TASK-007-booking.md) | 006 | Comunidade reserva sem exceder limite | DONE |
+| 8 | [TASK-008](TASK-008-demo-hardening.md) | 007 | Painel, seed, seguranca e roteiro estaveis | DONE |
 | 9 | [TASK-009](TASK-009-faq-assistant.md) | 008 | Diferencial opcional isolado | OPTIONAL |
 
 ## Regra de status

@@ -121,6 +121,10 @@ sobra menor que a duracao no final da sessao nao gera horario.
 **BR-043** Mudancas em documento, alocacao, supervisor ou recurso disparam
 recalculo de horarios futuros da sessao.
 
+Falha de disponibilidade ou conflito de agenda do supervisor retorna
+SUPERVISOR_SCHEDULE_CONFLICT. A alocacao e gravada somente depois de todas as
+validacoes; o frontend nao replica a formula de capacidade.
+
 ### Agendamento
 
 **BR-050** A criacao do agendamento bloqueia a linha do horario e, em ordem
@@ -143,6 +147,17 @@ Somente o hash do codigo e armazenado e ele nunca aparece em listagens.
 **BR-055** No MVP, a comunidade pode confirmar ou cancelar com codigo valido
 enquanto o inicio do horario nao passou. Depois disso, somente operador interno
 pode registrar o desfecho permitido.
+
+**BR-056** A consulta, criacao e gestao publica usam limites configuraveis em
+memoria e retornam `PUBLIC_RATE_LIMITED` com `Retry-After` quando excedidos.
+
+**BR-057** Somente Master pode desativar usuario. A desativacao e reversivel no
+modelo por `is_active`, preserva referencias e historico, e nao permite que o
+Master desative o proprio acesso na sessao atual.
+
+**BR-058** Uma reserva ativa vinculada a alocacao suspensa vira `AT_RISK`. A
+fila Master exibe somente sessao, horario, servico, local e causa operacional;
+nao exibe nome, e-mail, telefone ou dados clinicos.
 
 ## Cenarios que devem virar testes
 

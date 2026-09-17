@@ -44,6 +44,7 @@ from app.modules.documents.schemas import (
 )
 from app.modules.documents.services import StudentEligibility, supervisor_can_review
 from app.modules.documents.storage import DocumentStorage
+from app.modules.scheduling.services import suspend_ineligible_allocations
 
 router = APIRouter(tags=['documents'])
 MasterUser = Annotated[User, Depends(require_roles(Role.MASTER))]
@@ -480,6 +481,11 @@ async def reject_document_submission(
                 'requirement_id': str(requirement.id),
             },
         )
+    )
+    await suspend_ineligible_allocations(
+        session,
+        student_id=submission.student_id,
+        term_id=requirement.term_id,
     )
     await session.commit()
     await session.refresh(submission)

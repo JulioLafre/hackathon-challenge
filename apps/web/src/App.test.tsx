@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -130,7 +130,7 @@ describe('bootstrap da Clínica Escola', () => {
     await user.click(await screen.findByRole('link', { name: 'Semestres' }))
 
     expect(
-      await screen.findByRole('heading', { name: 'Configuracao academica' }),
+      await screen.findByRole('heading', { name: 'Configuração acadêmica' }),
     ).toBeInTheDocument()
     expect(screen.getByLabelText('Nome do semestre')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
@@ -179,10 +179,11 @@ describe('bootstrap da Clínica Escola', () => {
     await user.type(screen.getByLabelText('E-mail'), 'master@example.com')
     await user.type(screen.getByLabelText('Senha'), 'MasterDemo!2026')
     await user.click(screen.getByRole('button', { name: 'Entrar' }))
-    await user.click(await screen.findByRole('link', { name: 'Clinicas' }))
+    const platformNavigation = await screen.findByRole('navigation', { name: 'Navegação da plataforma' })
+    await user.click(within(platformNavigation).getByRole('link', { name: 'Clínicas' }))
 
     expect(
-      await screen.findByRole('heading', { name: 'Configuracao da clinica' }),
+      await screen.findByRole('heading', { name: 'Configuração da clínica' }),
     ).toBeInTheDocument()
     expect(screen.getByLabelText('Nome da clinica')).toBeInTheDocument()
     vi.unstubAllGlobals()

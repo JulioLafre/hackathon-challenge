@@ -81,7 +81,7 @@ referenciam um semestre, mantendo a configuracao isolada por `term_id`.
 | `clinical_sessions` | term_id, service_id, clinic_id, environment_id, supervisor_id, starts_at, ends_at, max_students_override, status | inicio < fim |
 | `session_allocations` | session_id, student_id, status, suspended_reason | estudante unico por sessao |
 | `appointment_slots` | session_id, starts_at, ends_at, capacity_total, reserved_count, version | intervalo unico por sessao; contagens >= 0 |
-| `appointments` | slot_id, allocation_id, room_id, public_name, public_email opcional, public_phone opcional, status, risk_status, management_token_hash, idempotency_key | ao menos um contato; token hash unico; idempotencia unica por escopo |
+| `appointments` | slot_id, allocation_id, room_id, public_name, public_email opcional, public_phone opcional, privacy_notice_version, status, risk_status, management_token_hash, idempotency_key | ao menos um contato; token hash unico; idempotencia unica no MVP; slot/alocacao ativos unicos |
 | `appointment_equipment_allocations` | appointment_id, environment_equipment_id, quantity | quantidade > 0; par unico |
 | `audit_events` | actor_user_id opcional, action, target_type, target_id, occurred_at, metadata_json | append-only |
 

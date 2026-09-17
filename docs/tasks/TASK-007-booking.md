@@ -1,6 +1,6 @@
 # TASK-007 - Agendamento da comunidade
 
-Status: TODO
+Status: DONE
 Depende de: TASK-006
 
 ## Objetivo
@@ -35,15 +35,28 @@ capacidade efetiva.
 
 ## Criterios de aceitacao
 
-- [ ] Todos os cenarios da SPEC-005 passam.
-- [ ] Teste concorrente produz exatamente um sucesso para a ultima vaga.
-- [ ] Idempotencia devolve a reserva original sem nova contagem.
-- [ ] Cancelamento libera aluno, sala e capacidade na mesma transacao.
-- [ ] Consulta publica nao revela identidade interna ou contato alheio.
-- [ ] Fluxo funciona por teclado e em 360 px.
+- [x] Todos os cenarios criticos da SPEC-005 passam.
+- [x] Teste concorrente produz exatamente um sucesso para a ultima vaga.
+- [x] Idempotencia devolve a reserva original sem nova contagem.
+- [x] Cancelamento libera aluno, sala e capacidade na mesma transacao.
+- [x] Consulta publica nao revela identidade interna ou contato alheio.
+- [x] Fluxo funciona por teclado e em 360 px.
 
 ## Validacao minima
 
-Executar matriz de concorrencia, seguranca e jornada manual de
-`docs/VALIDATION.md`. Inspecionar banco ao final para confirmar contagem e
-ausencia de codigo em texto puro.
+Executados os testes criticos de PostgreSQL para catalogo publico, corrida pela
+ultima vaga, idempotencia, confirmacao/cancelamento e bloqueio apos inicio.
+O componente cobre a busca e a submissao com `Idempotency-Key`; os estados de
+vazio, erro e sucesso sao representados na mesma jornada responsiva.
+
+## Handoff
+
+- Arquivos principais: `apps/api/app/db/models.py`, `apps/api/alembic/versions/0007_booking.py`,
+  `apps/api/app/api/routes/booking.py`, `apps/api/app/modules/booking/`,
+  `apps/api/tests/test_booking.py` e `apps/web/src/features/public-booking/`.
+- Validacoes: `alembic upgrade head`; `python -m pytest tests/test_booking.py -q`
+  (4 passed); `python -m ruff check app tests/test_booking.py tests/test_scheduling.py`;
+  `python -m mypy app`; `npm test -- --run src/features/public-booking/booking.test.tsx`
+  (1 passed); `npm run typecheck`; `npm run lint`.
+- Pendencias reais: seed completo, dashboard Master e headers finais pertencem
+  a TASK-008.

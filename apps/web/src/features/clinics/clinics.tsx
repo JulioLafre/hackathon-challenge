@@ -171,9 +171,9 @@ export function ClinicAdminPage({ token }: AuthenticatedProps) {
 
   return (
     <section className='private-content academics-page' aria-labelledby='clinic-page-title'>
-      <p className='eyebrow'>Catalogo operacional</p>
-      <h1 id='clinic-page-title'>Configuracao da clinica</h1>
-      <p className='private-intro'>Organize ambientes, recursos, servicos e limites por semestre. As alteracoes ficam disponiveis somente para o Master.</p>
+      <p className='eyebrow'>Configuração da operação</p>
+      <h1 id='clinic-page-title'>Configuração da clínica</h1>
+      <p className='private-intro'>Cadastre a clínica e seus recursos antes de definir limites, serviços e supervisão.</p>
       {error && <p className='form-error' role='alert'>{error}</p>}
       {notice && <p className='form-notice' role='status'>{notice}</p>}
       {isLoading ? <p className='loading-message'>Carregando configuracao...</p> : (
@@ -181,9 +181,10 @@ export function ClinicAdminPage({ token }: AuthenticatedProps) {
           <div className='academic-column'>
             <article className='private-card academic-card'>
               <div className='card-heading'>
-                <div><p className='eyebrow'>01 · unidade</p><h2>Clinica e ambientes</h2></div>
+                <div><p className='eyebrow'>01 · Unidade e ambientes</p><h2>Comece pela clínica</h2></div>
                 <span className='card-count'>{clinics.length}</span>
               </div>
+              <p className='field-help'>Crie a unidade e depois associe os ambientes que serão usados nos atendimentos.</p>
               <form className='compact-form' onSubmit={(event) => submit(event, '/clinics', clinicForm, 'Clinica criada.', () => setClinicForm(emptyClinic))}>
                 <Field id='clinic-name' label='Nome da clinica'>
                   <input id='clinic-name' value={clinicForm.name} onChange={(event) => setClinicForm({ ...clinicForm, name: event.target.value })} required />
@@ -207,9 +208,10 @@ export function ClinicAdminPage({ token }: AuthenticatedProps) {
 
             <article className='private-card academic-card'>
               <div className='card-heading'>
-                <div><p className='eyebrow'>02 · capacidade fisica</p><h2>Salas e equipamentos</h2></div>
+                <div><p className='eyebrow'>02 · Capacidade física</p><h2>Salas e equipamentos</h2></div>
                 <span className='card-count'>{rooms.length + equipment.length}</span>
               </div>
+              <p className='field-help'>Registre salas e equipamentos: eles determinam quantos atendimentos podem acontecer ao mesmo tempo.</p>
               <form className='compact-form' onSubmit={(event) => submit(event, '/rooms', roomForm, 'Sala criada.', () => setRoomForm({ ...roomForm, name: '' }))}>
                 <Field id='room-environment' label='Ambiente'>
                   <select id='room-environment' value={roomForm.environment_id} onChange={(event) => setRoomForm({ ...roomForm, environment_id: event.target.value })} required><Options items={activeEnvironments} /></select>
@@ -233,9 +235,10 @@ export function ClinicAdminPage({ token }: AuthenticatedProps) {
           <div className='academic-column'>
             <article className='private-card academic-card'>
               <div className='card-heading'>
-                <div><p className='eyebrow'>03 · semestre</p><h2>Limites da clinica</h2></div>
+                <div><p className='eyebrow'>03 · Limite do semestre</p><h2>Defina os limites da clínica</h2></div>
                 <span className='card-count'>{configs.length}</span>
               </div>
+              <p className='field-help'>Escolha a clínica e o semestre; esse limite controla atendimentos simultâneos e estudantes.</p>
               <form className='compact-form' onSubmit={(event) => submit(event, '/clinic-term-configs', { ...configForm, max_simultaneous_appointments: Number(configForm.max_simultaneous_appointments), max_students: Number(configForm.max_students) }, 'Limites do semestre configurados.', () => undefined)}>
                 <Field id='config-clinic' label='Clinica'><select id='config-clinic' value={configForm.clinic_id} onChange={(event) => setConfigForm({ ...configForm, clinic_id: event.target.value })} required><Options items={activeClinics} /></select></Field>
                 <Field id='config-term' label='Semestre'><select id='config-term' value={configForm.term_id} onChange={(event) => setConfigForm({ ...configForm, term_id: event.target.value })} required><Options items={activeTerms} /></select></Field>
@@ -249,9 +252,10 @@ export function ClinicAdminPage({ token }: AuthenticatedProps) {
 
             <article className='private-card academic-card'>
               <div className='card-heading'>
-                <div><p className='eyebrow'>04 · servicos</p><h2>Duracao e requisitos</h2></div>
+                <div><p className='eyebrow'>04 · Serviços</p><h2>Serviços e requisitos</h2></div>
                 <span className='card-count'>{services.length + requirements.length}</span>
               </div>
+              <p className='field-help'>Associe cada serviço a uma disciplina e informe os equipamentos necessários para realizá-lo.</p>
               <form className='compact-form' onSubmit={(event) => submit(event, '/services', { ...serviceForm, duration_minutes: Number(serviceForm.duration_minutes) }, 'Servico criado.', () => setServiceForm({ ...serviceForm, name: '' }))}>
                 <Field id='service-discipline' label='Disciplina'><select id='service-discipline' value={serviceForm.discipline_id} onChange={(event) => setServiceForm({ ...serviceForm, discipline_id: event.target.value })} required><Options items={activeDisciplines} /></select></Field>
                 <Field id='service-name' label='Nome do servico'><input id='service-name' value={serviceForm.name} onChange={(event) => setServiceForm({ ...serviceForm, name: event.target.value })} required /></Field>
@@ -268,9 +272,10 @@ export function ClinicAdminPage({ token }: AuthenticatedProps) {
 
             <article className='private-card academic-card'>
               <div className='card-heading'>
-                <div><p className='eyebrow'>05 · supervisao</p><h2>Escopo por semestre</h2></div>
+                <div><p className='eyebrow'>05 · Supervisão</p><h2>Defina a supervisão por semestre</h2></div>
                 <span className='card-count'>{scopes.length}</span>
               </div>
+              <p className='field-help'>Associe supervisor, serviço e ambiente; habilite a revisão documental quando necessário.</p>
               <form className='compact-form' onSubmit={(event) => submit(event, '/supervisor-service-scopes', { supervisor_id: scopeForm.supervisor_id, term_id: scopeForm.term_id, service_id: scopeForm.service_id, environment_id: scopeForm.environment_id, can_review_documents: scopeForm.review, max_students_override: scopeForm.override ? Number(scopeForm.override) : null }, 'Escopo criado.', () => undefined)}>
                 <Field id='scope-supervisor' label='Supervisor'><select id='scope-supervisor' value={scopeForm.supervisor_id} onChange={(event) => setScopeForm({ ...scopeForm, supervisor_id: event.target.value })} required><option value=''>Selecione</option>{supervisors.map((item) => <option key={item.user_id} value={item.user_id}>{item.full_name} · padrao {item.max_students_default}</option>)}</select></Field>
                 <Field id='scope-term' label='Semestre'><select id='scope-term' value={scopeForm.term_id} onChange={(event) => setScopeForm({ ...scopeForm, term_id: event.target.value })} required><Options items={activeTerms} /></select></Field>

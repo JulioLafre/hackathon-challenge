@@ -14,6 +14,7 @@ from sqlalchemy import (
     Text,
     Time,
     UniqueConstraint,
+    column,
     func,
     text,
 )
@@ -912,4 +913,352 @@ class AuditEvent(Base):
     )
     metadata_json: Mapped[dict[str, object]] = mapped_column(
         JSON, nullable=False, default=dict, server_default=text('{}')
+    )
+
+
+class ClinicalSessionStatus(StrEnum):
+    DRAFT = 'DRAFT'
+    PUBLISHED = 'PUBLISHED'
+    CANCELLED = 'CANCELLED'
+    COMPLETED = 'COMPLETED'
+
+
+class SessionAllocationStatus(StrEnum):
+    ACTIVE = 'ACTIVE'
+    SUSPENDED = 'SUSPENDED'
+    CANCELLED = 'CANCELLED'
+
+
+class ClinicalSession(Base):
+    __tablename__ = 'clinical_sessions'
+    __table_args__ = (
+        CheckConstraint(
+            'starts_at < ends_at',
+            name='ck_clinical_sessions_interval',
+        ),
+        CheckConstraint(
+            'max_students_override IS NULL OR max_students_override > 0',
+            name='ck_clinical_sessions_limit_positive',
+        ),
+        CheckConstraint(
+            'status IN (\'DRAFT\', \'PUBLISHED\', \'CANCELLED\', \'COMPLETED\')',
+            name='ck_clinical_sessions_status',
+        ),
+        Index('ix_clinical_sessions_term', 'term_id'),
+        Index(
+            'ix_clinical_sessions_environment_interval',
+            'environment_id',
+            'starts_at',
+            'ends_at',
+        ),
+        Index(
+            'ix_clinical_sessions_supervisor_interval',
+            'supervisor_id',
+            'starts_at',
+            'ends_at',
+        ),
+        Index('ix_clinical_sessions_status', 'status'),
+    )
+
+    id: Mapped[UUID] = uuid_column()
+    term_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey('academic_terms.id', ondelete='RESTRICT'),
+        nullable=False,
+    )
+    service_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey('services.id', ondelete='RESTRICT'),
+        nullable=False,
+    )
+    clinic_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey('clinics.id', ondelete='RESTRICT'),
+        nullable=False,
+    )
+    environment_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey('environments.id', ondelete='RESTRICT'),
+        nullable=False,
+    )
+    supervisor_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey('supervisors.user_id', ondelete='RESTRICT'),
+        nullable=False,
+    )
+    starts_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    ends_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    max_students_override: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    status: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=ClinicalSessionStatus.DRAFT.value,
+        server_default=ClinicalSessionStatus.DRAFT.value,
+    )
+    capacity_explanation: Mapped[dict[str, object] | None] = mapped_column(
+        JSON, nullable=True
+    )
+    published_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class SessionAllocation(Base):
+    __tablename__ = 'session_allocations'
+    __table_args__ = (
+        CheckConstraint(
+            'status IN (\'ACTIVE\', \'SUSPENDED\', \'CANCELLED\')',
+            name='ck_session_allocations_status',
+        ),
+        Index(
+            'uq_session_allocations_active_student',
+            'session_id',
+            'student_id',
+            unique=True,
+            postgresql_where=column('status').in_(['ACTIVE', 'SUSPENDED']),
+        ),
+        Index('ix_session_allocations_session_status', 'session_id', 'status'),
+        Index('ix_session_allocations_student_status', 'student_id', 'status'),
+    )
+
+    id: Mapped[UUID] = uuid_column()
+    session_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey('clinical_sessions.id', ondelete='RESTRICT'),
+        nullable=False,
+    )
+    student_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey('students.user_id', ondelete='RESTRICT'),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=SessionAllocationStatus.ACTIVE.value,
+        server_default=SessionAllocationStatus.ACTIVE.value,
+    )
+    suspended_reason: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class AppointmentSlot(Base):
+    __tablename__ = 'appointment_slots'
+    __table_args__ = (
+        CheckConstraint(
+            'starts_at < ends_at',
+            name='ck_appointment_slots_interval',
+        ),
+        CheckConstraint(
+            'capacity_total >= 0 AND reserved_count >= 0',
+            name='ck_appointment_slots_counts_nonnegative',
+        ),
+        UniqueConstraint(
+            'session_id',
+            'starts_at',
+            name='uq_appointment_slots_session_start',
+        ),
+        Index('ix_appointment_slots_lookup', 'session_id', 'starts_at'),
+    )
+
+    id: Mapped[UUID] = uuid_column()
+    session_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey('clinical_sessions.id', ondelete='RESTRICT'),
+        nullable=False,
+    )
+    starts_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    ends_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    capacity_total: Mapped[int] = mapped_column(Integer, nullable=False)
+    reserved_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default='0'
+    )
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default='1'
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class AppointmentStatus(StrEnum):
+    BOOKED = 'BOOKED'
+    CONFIRMED = 'CONFIRMED'
+    CANCELLED = 'CANCELLED'
+    COMPLETED = 'COMPLETED'
+    NO_SHOW = 'NO_SHOW'
+
+
+class AppointmentRiskStatus(StrEnum):
+    NONE = 'NONE'
+    AT_RISK = 'AT_RISK'
+    RESOLVED = 'RESOLVED'
+
+
+class Appointment(Base):
+    __tablename__ = 'appointments'
+    __table_args__ = (
+        CheckConstraint(
+            'status IN (\'BOOKED\', \'CONFIRMED\', '
+            '\'CANCELLED\', \'COMPLETED\', \'NO_SHOW\')',
+            name='ck_appointments_status',
+        ),
+        CheckConstraint(
+            'risk_status IN (\'NONE\', \'AT_RISK\', \'RESOLVED\')',
+            name='ck_appointments_risk_status',
+        ),
+        CheckConstraint(
+            '(public_email IS NOT NULL AND length(trim(public_email)) > 0) '
+            'OR (public_phone IS NOT NULL AND length(trim(public_phone)) > 0)',
+            name='ck_appointments_contact_required',
+        ),
+        UniqueConstraint(
+            'management_token_hash',
+            name='uq_appointments_management_token_hash',
+        ),
+        UniqueConstraint(
+            'idempotency_key',
+            name='uq_appointments_idempotency_key',
+        ),
+        Index(
+            'uq_appointments_slot_allocation_active',
+            'slot_id',
+            'allocation_id',
+            unique=True,
+            postgresql_where=column('status').in_(
+                ['BOOKED', 'CONFIRMED']
+            ),
+        ),
+        Index('ix_appointments_slot_status', 'slot_id', 'status'),
+        Index('ix_appointments_allocation_status', 'allocation_id', 'status'),
+        Index('ix_appointments_room', 'room_id', 'status'),
+    )
+
+    id: Mapped[UUID] = uuid_column()
+    slot_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey('appointment_slots.id', ondelete='RESTRICT'),
+        nullable=False,
+    )
+    allocation_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey('session_allocations.id', ondelete='RESTRICT'),
+        nullable=False,
+    )
+    room_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey('rooms.id', ondelete='RESTRICT'),
+        nullable=False,
+    )
+    public_name: Mapped[str] = mapped_column(Text, nullable=False)
+    public_email: Mapped[str | None] = mapped_column(Text, nullable=True)
+    public_phone: Mapped[str | None] = mapped_column(Text, nullable=True)
+    privacy_notice_version: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=AppointmentStatus.BOOKED.value,
+        server_default=AppointmentStatus.BOOKED.value,
+    )
+    risk_status: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=AppointmentRiskStatus.NONE.value,
+        server_default=AppointmentRiskStatus.NONE.value,
+    )
+    management_token_hash: Mapped[str] = mapped_column(
+        Text, nullable=False
+    )
+    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
+    confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class AppointmentEquipmentAllocation(Base):
+    __tablename__ = 'appointment_equipment_allocations'
+    __table_args__ = (
+        CheckConstraint(
+            'quantity > 0',
+            name='ck_appointment_equipment_allocations_quantity_positive',
+        ),
+        UniqueConstraint(
+            'appointment_id',
+            'environment_equipment_id',
+            name='uq_appointment_equipment_allocations_pair',
+        ),
+        Index(
+            'ix_appointment_equipment_allocations_appointment',
+            'appointment_id',
+        ),
+        Index(
+            'ix_appointment_equipment_allocations_inventory',
+            'environment_equipment_id',
+        ),
+    )
+
+    id: Mapped[UUID] = uuid_column()
+    appointment_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey('appointments.id', ondelete='RESTRICT'),
+        nullable=False,
+    )
+    environment_equipment_id: Mapped[UUID] = mapped_column(
+        PostgresUUID(as_uuid=True),
+        ForeignKey('environment_equipments.id', ondelete='RESTRICT'),
+        nullable=False,
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )

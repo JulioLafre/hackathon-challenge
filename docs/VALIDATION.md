@@ -15,7 +15,7 @@ Quando a estrutura existir, toda tarefa deve executar o subconjunto aplicavel:
 docker compose -f infra/compose.yml config
 docker compose -f infra/compose.yml up -d --build
 docker compose -f infra/compose.yml exec api alembic upgrade head
-docker compose -f infra/compose.yml exec api pytest
+docker compose -f infra/compose.yml exec api python -m pytest
 docker compose -f infra/compose.yml exec api ruff check .
 docker compose -f infra/compose.yml exec api mypy app
 npm --prefix apps/web run lint
@@ -61,6 +61,30 @@ clinicas com regressao academica e auth, Ruff, mypy, teste de componente da
 configuracao Master, typecheck, lint, build e duas execucoes do seed em banco
 limpo. Nao foram executados testes de sessoes/capacidade efetiva porque esses
 fluxos ainda nao fazem parte da tarefa.
+
+Para a TASK-006, a validacao executada foi reduzida aos pontos criticos da
+fatia: python -m pytest tests/test_scheduling.py -q (6 passed), Ruff, mypy,
+teste de componente de sessoes (3 passed), typecheck, lint e build.
+
+Para a TASK-007, foram executados os testes PostgreSQL de catalogo publico,
+concorrencia pela ultima vaga, idempotencia, confirmacao/cancelamento e bloqueio
+apos inicio: python -m pytest tests/test_booking.py -q (4 passed), migration
+0007_booking com downgrade/upgrade, teste de componente publico (1 passed),
+Ruff, mypy, typecheck, lint e build.
+
+Para a TASK-008, foram executados os testes PostgreSQL do dashboard, RBAC,
+desativacao, auditoria e fila AT_RISK: python -m pytest tests/test_admin.py -q
+(3 passed), mais a regressao de rejeicao documental em test_scheduling.py. O
+seed foi executado duas vezes e manteve os totais do banco local; a suíte web
+ficou em 5 arquivos e 13 testes, com typecheck, lint e build aprovados. O
+preflight CORS respondeu 200 com Idempotency-Key, e API/frontend responderam
+200 com headers de seguranca.
+
+Para a revisao de jornada da interface, foram validados os roteiros por papel,
+a tela propria de Auditoria do Master, o resumo da jornada do estudante e a
+linguagem operacional das telas Master: a suíte web ficou em 7 arquivos e 20
+testes, com typecheck, lint e build aprovados.
+Nenhum contrato da API foi alterado.
 
 ## Teste de concorrencia critico
 

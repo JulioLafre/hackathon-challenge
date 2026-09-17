@@ -17,12 +17,16 @@ Codigos de dominio iniciais: `INVALID_CREDENTIALS`, `FORBIDDEN`,
 `INVALID_TOKEN`, `USER_INACTIVE`, `LOGIN_RATE_LIMITED`, `NOT_FOUND`,
 `VALIDATION_ERROR`,
 `DOCUMENTS_PENDING`, `ACADEMIC_CONFLICT`, `SUPERVISION_CAPACITY_REACHED`,
-`PHYSICAL_CAPACITY_REACHED`, `CAPACITY_BELOW_COMMITTED`, `SESSION_NOT_PUBLISHABLE`,
+`PHYSICAL_CAPACITY_REACHED`, `SUPERVISOR_SCHEDULE_CONFLICT`,
+`CAPACITY_BELOW_COMMITTED`, `SESSION_NOT_PUBLISHABLE`,
 `SLOT_FULL`, `INVALID_MANAGEMENT_CODE`, `INVALID_STATE_TRANSITION`,
 `DUPLICATE_RESOURCE`, `PROFILE_REQUIRED`, `ACADEMIC_INTERVAL_CONFLICT`,
 `INVALID_DOCUMENT_FILE`, `DOCUMENT_TOO_LARGE`, `REVIEW_NOTE_REQUIRED`,
 `DOCUMENT_EXPIRY_REQUIRED`, `DOCUMENT_EXPIRY_INVALID`.
+`PUBLIC_RATE_LIMITED`, `PRIVACY_NOTICE_VERSION_REQUIRED`.
 Configuracoes que apontam para recurso desativado retornam `422 RESOURCE_INACTIVE`.
+
+Codigo de erro administrativo: SELF_DEACTIVATION_FORBIDDEN.
 
 ## Autenticacao e identidade
 
@@ -197,6 +201,21 @@ A explicacao de capacidade retorna `effective`, o mapa `constraints` com
 `eligible_students`, `supervision`, `rooms`, `equipment` e
 `clinic_appointments`, e a lista `limiting_factors`.
 
+POST /sessions recebe term_id, service_id, clinic_id, environment_id,
+supervisor_id, starts_at, ends_at e max_students_override opcional. Datas
+precisam conter offset e sao normalizadas para UTC. A sessao nasce DRAFT; o
+operador deve alocar estudantes antes de publicar.
+
+POST /sessions/{id}/allocations recebe student_id somente quando o ator e
+Master; o estudante usa o proprio ID. A API valida documentos, semestre,
+curso/disciplina, disponibilidade, bloqueios academicos e limites antes do
+commit. Falhas retornam codigo estavel sem criar alocacao parcial.
+
+POST /sessions/{id}/publish calcula a capacidade no servidor e gera slots com
+a duracao do servico. Sobra menor que a duracao nao vira slot; repetir a
+publicacao devolve a mesma quantidade materializada. GET /sessions/{id}/capacity
+nao delega calculo ao frontend e informa todos os fatores e os gargalos.
+
 ## Jornada publica
 
 | Metodo | Rota | Finalidade |
@@ -212,9 +231,19 @@ A criacao recebe `slot_id`, `name`, `email`, `phone` e
 clinica, horario e o codigo de gestao uma unica vez. Nunca retorna estudante,
 supervisor, hash ou dados de outras reservas.
 
+Nome e pelo menos um contato sao obrigatorios. A versao do aviso deve coincidir
+com a configuracao vigente. Repetir a mesma `Idempotency-Key` devolve a reserva
+original com `200`, sem novo consumo e sem repetir o codigo. Consulta, criacao e
+gestao por codigo possuem limites em memoria e respondem `429 PUBLIC_RATE_LIMITED`
+com `Retry-After`.
+
 ## Administracao
 
 - `GET /admin/dashboard?term_id=`: contagens de pendencias, sessoes e agenda;
+- `POST /users/{user_id}/deactivate`: desativacao reversivel por Master, com
+  auditoria e sem permitir auto-desativacao;
+- `GET /admin/appointments/at-risk`: fila paginada de reservas em risco com
+  sessao, horario, causa operacional e sem contato da comunidade;
 - `GET /audit-events`: consulta paginada por ator, acao, alvo e periodo;
 - `GET /health/live`: processo vivo;
 - `GET /health/ready`: banco e storage disponiveis.

@@ -243,10 +243,10 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
 
   return (
     <section className='private-content academics-page' aria-labelledby='academic-page-title'>
-      <p className='eyebrow'>Configuracao do semestre</p>
-      <h1 id='academic-page-title'>Configuracao academica</h1>
+      <p className='eyebrow'>Configuração do semestre</p>
+      <h1 id='academic-page-title'>Configuração acadêmica</h1>
       <p className='private-intro'>
-        Monte a grade e os vinculos de um semestre sem alterar o codigo do sistema.
+        Crie o período acadêmico e cadastre a estrutura que será usada nas clínicas.
       </p>
       {error && <p className='form-error' role='alert'>{error}</p>}
       {notice && <p className='form-notice' role='status'>{notice}</p>}
@@ -258,11 +258,14 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
             <article className='private-card academic-card'>
               <div className='card-heading'>
                 <div>
-                  <p className='eyebrow'>01 · Calendario</p>
-                  <h2>Semestres</h2>
+                  <p className='eyebrow'>01 · Período acadêmico</p>
+                  <h2>Crie e ative o semestre</h2>
                 </div>
                 <span className='card-count'>{terms.length}</span>
               </div>
+              <p className='field-help'>
+                Comece por aqui: o semestre ativo define o período das ofertas e dos vínculos acadêmicos.
+              </p>
               <form autoComplete='off' className='compact-form' onSubmit={createTerm}>
                 <label htmlFor='term-name'>Nome do semestre</label>
                 <input autoComplete='off' id='term-name' name='name' required value={termForm.name} onChange={(event) => setTermForm({ ...termForm, name: event.target.value })} />
@@ -294,11 +297,14 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
             <article className='private-card academic-card'>
               <div className='card-heading'>
                 <div>
-                  <p className='eyebrow'>02 · Pessoas</p>
-                  <h2>Grade academica</h2>
+                  <p className='eyebrow'>02 · Estrutura acadêmica</p>
+                  <h2>Cursos e disciplinas</h2>
                 </div>
-                <span className='card-count'>{cohorts.length}</span>
+                <span className='card-count'>{courses.length + disciplines.length}</span>
               </div>
+              <p className='field-help'>
+                Cadastre o curso primeiro; depois associe cada disciplina ao curso correspondente.
+              </p>
               <div className='form-stack'>
                 <form autoComplete='off' className='compact-form' onSubmit={createCourse}>
                 <label htmlFor='course-name'>Nome do curso</label>
@@ -338,11 +344,14 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
             <article className='private-card academic-card'>
               <div className='card-heading'>
                 <div>
-                  <p className='eyebrow'>03 · Turmas</p>
-                  <h2>Vinculos e bloqueios</h2>
+                  <p className='eyebrow'>03 · Turmas e bloqueios</p>
+                  <h2>Organize as turmas</h2>
                 </div>
-                <span className='card-count'>{disciplines.length}</span>
+                <span className='card-count'>{cohorts.length}</span>
               </div>
+              <p className='field-help'>
+                Crie as turmas do semestre e registre os horários em que elas não podem atuar na clínica.
+              </p>
               <form autoComplete='off' className='compact-form' onSubmit={createCohort}>
                 <label htmlFor='cohort-term'>Semestre da turma</label>
                 <select id='cohort-term' name='term_id' required value={cohortForm.term_id} onChange={(event) => setCohortForm({ ...cohortForm, term_id: event.target.value })}>

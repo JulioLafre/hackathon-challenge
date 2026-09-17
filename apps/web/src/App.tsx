@@ -1,5 +1,6 @@
 import { Link, Route, Routes } from 'react-router-dom'
 import { AuthProvider, LoginPage, ProtectedRoute } from './features/auth/auth'
+import { PublicBookingPage } from './features/public-booking/booking'
 import './styles.css'
 
 const highlights = [
@@ -67,6 +68,9 @@ function HomePage() {
               </a>
               <Link className="text-link" to="/login">
                 Já faço parte <span aria-hidden="true">→</span>
+              </Link>
+              <Link className='text-link' to='/agendar'>
+                Agendar atendimento <span aria-hidden='true'>â†’</span>
               </Link>
             </div>
           </div>
@@ -140,6 +144,7 @@ export function App() {
   return (
     <AuthProvider>
       <Routes>
+        <Route path='/agendar' element={<PublicBookingPage />} />
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/app/*" element={<ProtectedRoute />} />

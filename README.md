@@ -83,13 +83,15 @@ docker compose -f infra/compose.yml exec api seed-demo
 As credenciais demo ficam nas variaveis `DEMO_*` do ambiente local. Elas sao
 apenas para a demonstracao e devem ser substituidas antes de qualquer uso real.
 O login fica em <http://localhost:5173/login>.
+O agendamento publico fica em <http://localhost:5173/agendar>; o seed cria uma
+sessao, uma alocacao aprovada e horarios ficticios para essa demonstracao.
 
 Os gates da API rodam no container; os gates do frontend rodam no workspace,
 porque a imagem final do frontend contem somente o build estatico:
 
 ```bash
 docker compose -f infra/compose.yml exec api alembic upgrade head
-docker compose -f infra/compose.yml exec api pytest
+docker compose -f infra/compose.yml exec api python -m pytest
 docker compose -f infra/compose.yml exec api ruff check .
 docker compose -f infra/compose.yml exec api mypy app
 npm --prefix apps/web ci

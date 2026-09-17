@@ -1,6 +1,6 @@
 # SPEC-006 - Operacao Master e auditoria
 
-Status: READY
+Status: DONE
 
 ## Objetivo
 
@@ -57,16 +57,18 @@ Entao recebe `403 FORBIDDEN`.
 
 ## Contratos afetados
 
-`GET /admin/dashboard`, gestao de cadastros, `audit_events` e interface interna.
+GET /admin/dashboard, POST /users/{id}/deactivate,
+GET /admin/appointments/at-risk, gestao de cadastros, audit_events e
+interface interna.
 
 ## Criterios de aceitacao
 
-- [ ] Painel responde para semestre selecionado e possui estado vazio.
-- [ ] Numeros batem com consultas de integracao do seed.
-- [ ] Mutacoes criticas aparecem na auditoria com ator, alvo, acao e instante.
-- [ ] Auditoria nao contem PII, token ou conteudo de arquivo.
-- [ ] Desativacao revoga acesso sem quebrar referencias.
-- [ ] Reservas em risco ficam visiveis e acionaveis.
+- [x] Painel responde para semestre selecionado e possui estado vazio.
+- [x] Numeros batem com consultas de integracao do seed.
+- [x] Mutacoes criticas aparecem na auditoria com ator, alvo, acao e instante.
+- [x] Auditoria nao contem PII, token ou conteudo de arquivo.
+- [x] Desativacao revoga acesso sem quebrar referencias.
+- [x] Reservas em risco ficam visiveis e acionaveis.
 
 ## Questoes em aberto
 

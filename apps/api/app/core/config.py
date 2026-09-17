@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     access_token_expires_minutes: int = 30
     login_rate_limit_attempts: int = 5
     login_rate_limit_window_seconds: int = 900
+    public_query_rate_limit_requests: int = 60
+    public_query_rate_limit_window_seconds: int = 60
+    public_create_rate_limit_requests: int = 10
+    public_create_rate_limit_window_seconds: int = 3600
+    public_management_rate_limit_requests: int = 10
+    public_management_rate_limit_window_seconds: int = 900
+    privacy_notice_version: str = '2026-01'
     demo_master_email: str = "master.demo@demo.clinicaescola.dev"
     demo_master_password: str = "MasterDemo!2026"
     demo_supervisor_email: str = "supervisor.demo@demo.clinicaescola.dev"

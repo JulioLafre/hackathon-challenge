@@ -1,5 +1,6 @@
 import asyncio
-from datetime import date, time
+from datetime import UTC, date, datetime, time
+from uuid import UUID
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -11,18 +12,24 @@ from app.db.models import (
     ClassBlock,
     Clinic,
     ClinicalService,
+    ClinicalSession,
+    ClinicalSessionStatus,
     ClinicTermConfig,
     Cohort,
     Course,
     Discipline,
     DisciplineKind,
     DocumentRequirement,
+    DocumentSubmission,
+    DocumentSubmissionStatus,
     Environment,
     EnvironmentEquipment,
     EquipmentType,
     Role,
     Room,
     ServiceEquipmentRequirement,
+    SessionAllocation,
+    SessionAllocationStatus,
     Student,
     StudentAcademicLink,
     StudentAvailability,
@@ -34,6 +41,7 @@ from app.db.models import (
     User,
 )
 from app.db.session import create_engine, create_session_factory
+from app.modules.scheduling.services import calculate_capacity, materialize_slots
 
 
 async def seed_users(
@@ -158,14 +166,13 @@ async def seed_academic_demo(
         )
     )
     if document_requirement is None:
-        session.add(
-            DocumentRequirement(
-                term_id=term.id,
-                discipline_id=discipline.id,
-                name='Comprovante academico ficticio',
-                expires_required=True,
-            )
+        document_requirement = DocumentRequirement(
+            term_id=term.id,
+            discipline_id=discipline.id,
+            name='Comprovante academico ficticio',
+            expires_required=True,
         )
+        session.add(document_requirement)
 
     cohort = await session.scalar(
         select(Cohort).where(
@@ -380,6 +387,95 @@ async def seed_academic_demo(
                 max_students_override=2,
             )
         )
+    await session.flush()
+    await seed_scheduling_demo(
+        session,
+        term_id=term.id,
+        service_id=service.id,
+        clinic_id=clinic.id,
+        environment_id=environment.id,
+        supervisor_id=supervisor.user_id,
+        student_id=student.user_id,
+        requirement_id=document_requirement.id,
+    )
+
+
+async def seed_scheduling_demo(
+    session: AsyncSession,
+    *,
+    term_id: UUID,
+    service_id: UUID,
+    clinic_id: UUID,
+    environment_id: UUID,
+    supervisor_id: UUID,
+    student_id: UUID,
+    requirement_id: UUID,
+) -> None:
+    submission = await session.scalar(
+        select(DocumentSubmission).where(
+            DocumentSubmission.requirement_id == requirement_id,
+            DocumentSubmission.student_id == student_id,
+            DocumentSubmission.status == DocumentSubmissionStatus.APPROVED.value,
+        )
+    )
+    if submission is None:
+        session.add(
+            DocumentSubmission(
+                requirement_id=requirement_id,
+                student_id=student_id,
+                storage_key='00000000-0000-0000-0000-000000000007',
+                original_name='comprovante-ficticio.pdf',
+                mime_type='application/pdf',
+                size_bytes=128,
+                status=DocumentSubmissionStatus.APPROVED.value,
+                expires_at=datetime(2026, 12, 20, 23, 59, tzinfo=UTC),
+            )
+        )
+        await session.flush()
+
+    clinical_session = await session.scalar(
+        select(ClinicalSession).where(
+            ClinicalSession.term_id == term_id,
+            ClinicalSession.service_id == service_id,
+            ClinicalSession.environment_id == environment_id,
+            ClinicalSession.supervisor_id == supervisor_id,
+            ClinicalSession.starts_at == datetime(2026, 10, 6, 11, tzinfo=UTC),
+        )
+    )
+    if clinical_session is None:
+        clinical_session = ClinicalSession(
+            term_id=term_id,
+            service_id=service_id,
+            clinic_id=clinic_id,
+            environment_id=environment_id,
+            supervisor_id=supervisor_id,
+            starts_at=datetime(2026, 10, 6, 11, tzinfo=UTC),
+            ends_at=datetime(2026, 10, 6, 13, tzinfo=UTC),
+            status=ClinicalSessionStatus.DRAFT.value,
+        )
+        session.add(clinical_session)
+        await session.flush()
+
+    allocation = await session.scalar(
+        select(SessionAllocation).where(
+            SessionAllocation.session_id == clinical_session.id,
+            SessionAllocation.student_id == student_id,
+        )
+    )
+    if allocation is None:
+        session.add(
+            SessionAllocation(
+                session_id=clinical_session.id,
+                student_id=student_id,
+                status=SessionAllocationStatus.ACTIVE.value,
+            )
+        )
+        await session.flush()
+
+    capacity = await calculate_capacity(session, clinical_session)
+    clinical_session.capacity_explanation = capacity.as_dict()
+    await materialize_slots(session, clinical_session, capacity)
+    clinical_session.status = ClinicalSessionStatus.PUBLISHED.value
 
 
 async def run_seed() -> None:
