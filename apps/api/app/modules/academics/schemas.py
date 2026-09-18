@@ -1,4 +1,5 @@
 from datetime import date, time
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -150,7 +151,15 @@ class StudentCreate(BaseModel):
     phone: str | None = Field(default=None, max_length=30)
 
 
+class StudentProfileUpdate(BaseModel):
+    registration: str = Field(min_length=1, max_length=80)
+    full_name: str = Field(min_length=1, max_length=180)
+    phone: str | None = Field(default=None, max_length=30)
+
+
 class StudentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     user_id: UUID
     registration: str
     full_name: str
@@ -192,6 +201,11 @@ class StudentAcademicLinkRead(BaseModel):
 class AvailabilityUpdate(BaseModel):
     term_id: UUID
     intervals: list[IntervalPayload]
+
+
+class ManagedAvailabilityUpdate(AvailabilityUpdate):
+    user_id: UUID
+    owner_type: Literal['STUDENT', 'SUPERVISOR']
 
 
 class AvailabilityRead(BaseModel):

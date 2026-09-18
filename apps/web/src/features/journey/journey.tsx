@@ -20,26 +20,44 @@ type RoleJourneyContent = {
 const roleJourneys: Record<UserRole, readonly JourneyStep[]> = {
   MASTER: [
     {
+      id: 'home',
+      label: '1. Central',
+      description: 'Acompanhe indicadores, pendências e acesso rápido a todos os módulos.',
+      path: '/app',
+    },
+    {
       id: 'term',
-      label: '1. Semestre',
-      description: 'Ative o semestre e cadastre a estrutura acadêmica usada nas clínicas.',
+      label: '2. Semestres',
+      description: 'Ative o semestre e cadastre cursos, disciplinas, turmas e bloqueios.',
       path: '/app/semestres',
     },
     {
+      id: 'people',
+      label: '3. Pessoas',
+      description: 'Mantenha usuários, perfis acadêmicos e vínculos de estudantes.',
+      path: '/app/pessoas',
+    },
+    {
       id: 'clinic',
-      label: '2. Clínica',
-      description: 'Cadastre clínicas, ambientes, recursos, serviços e limites de atendimento.',
+      label: '4. Clínicas',
+      description: 'Cadastre recursos, serviços, limites e escopos de supervisão.',
       path: '/app/clinicas',
     },
     {
-      id: 'operation',
-      label: '3. Operação',
-      description: 'Confira sessões, reservas, pendências e capacidade do semestre ativo.',
-      path: '/app/visao-geral',
+      id: 'documents',
+      label: '5. Documentos',
+      description: 'Configure requisitos e revise submissões documentais.',
+      path: '/app/documentos',
+    },
+    {
+      id: 'sessions',
+      label: '6. Sessões',
+      description: 'Crie rascunhos, acompanhe capacidade e publique horários.',
+      path: '/app/sessoes-master',
     },
     {
       id: 'audit',
-      label: '4. Auditoria',
+      label: '7. Auditoria',
       description: 'Veja quem alterou dados administrativos e quando.',
       path: '/app/auditoria',
     },
@@ -72,20 +90,26 @@ const roleJourneys: Record<UserRole, readonly JourneyStep[]> = {
       path: '/app/documentos',
     },
     {
+      id: 'profile',
+      label: '2. Meu perfil',
+      description: 'Mantenha nome, matricula e contato atualizados.',
+      path: '/app/perfil',
+    },
+    {
       id: 'availability',
-      label: '2. Minha disponibilidade',
+      label: '3. Minha disponibilidade',
       description: 'Informe os horários em que pode participar.',
       path: '/app/minha-disponibilidade',
     },
     {
       id: 'sessions',
-      label: '3. Sessões disponíveis',
+      label: '4. Sessões disponíveis',
       description: 'Escolha uma oportunidade compatível e acompanhe suas alocações.',
       path: '/app/sessoes-disponiveis',
     },
     {
       id: 'journey',
-      label: '4. Resumo da jornada',
+      label: '5. Resumo da jornada',
       description: 'Revise o andamento completo da sua jornada.',
       path: '/app/minha-jornada',
     },
@@ -94,12 +118,12 @@ const roleJourneys: Record<UserRole, readonly JourneyStep[]> = {
 
 const roleJourneyContent: Record<UserRole, RoleJourneyContent> = {
   MASTER: {
-    title: 'Comece pelo semestre',
-    description: 'Configure o semestre ativo antes de abrir clínicas, serviços e sessões.',
-    firstAction: 'Abrir configuração do semestre',
-    firstActionDescription: 'Crie o período, defina as datas e cadastre cursos, disciplinas e turmas.',
-    firstActionHeading: 'Ative o semestre',
-    followingHeading: 'Depois, configure clínicas e serviços',
+    title: 'Central de operação',
+    description: 'Acesse cada parte da operação Master e acompanhe o que precisa de atenção no semestre.',
+    firstAction: 'Abrir a central Master',
+    firstActionDescription: 'Veja indicadores, alertas, agenda, pessoas, infraestrutura, documentos e auditoria.',
+    firstActionHeading: 'Acompanhe a operação',
+    followingHeading: 'Depois, configure o semestre',
   },
   SUPERVISOR: {
     title: 'Comece pela disponibilidade',
@@ -125,7 +149,7 @@ function getRoleJourney(role: UserRole): readonly JourneyStep[] {
 
 function isCurrentStep(role: UserRole, step: JourneyStep, pathname: string): boolean {
   if (pathname === step.path) return true
-  return role === 'MASTER' && step.id === 'operation' && pathname === '/app/auditoria'
+  return role === 'MASTER' && step.id === 'home' && pathname === '/app/visao-geral'
 }
 
 function StepLink({
@@ -259,7 +283,9 @@ export function StudentJourneyPage() {
               <Link className='text-link' to={step.path}>
                 {index === 0
                   ? 'Abrir documentos'
-                  : index === 1
+                  : step.id === 'profile'
+                    ? 'Atualizar perfil'
+                    : step.id === 'availability'
                     ? 'Informar disponibilidade'
                     : 'Ver sessões disponíveis'}
                 <span aria-hidden='true'>→</span>

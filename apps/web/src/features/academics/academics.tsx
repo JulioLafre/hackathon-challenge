@@ -38,6 +38,17 @@ type Cohort = {
   is_active: boolean
 }
 
+type ClassBlock = {
+  id: string
+  cohort_id: string
+  discipline_id: string | null
+  weekday: number
+  start_time: string
+  end_time: string
+  time_zone: string
+  is_active: boolean
+}
+
 type Interval = {
   weekday: number
   start_time: string
@@ -65,6 +76,7 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
   const [courses, setCourses] = useState<Course[]>([])
   const [disciplines, setDisciplines] = useState<Discipline[]>([])
   const [cohorts, setCohorts] = useState<Cohort[]>([])
+  const [blocks, setBlocks] = useState<ClassBlock[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -93,22 +105,28 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
     start_time: '',
     end_time: '',
   })
+  const [editingTermId, setEditingTermId] = useState<string | null>(null)
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null)
+  const [editingDisciplineId, setEditingDisciplineId] = useState<string | null>(null)
+  const [editingCohortId, setEditingCohortId] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
-      const [nextTerms, nextCourses, nextDisciplines, nextCohorts] =
+      const [nextTerms, nextCourses, nextDisciplines, nextCohorts, nextBlocks] =
         await Promise.all([
           apiFetch<Term[]>(token, '/terms'),
           apiFetch<Course[]>(token, '/courses'),
           apiFetch<Discipline[]>(token, '/disciplines'),
           apiFetch<Cohort[]>(token, '/cohorts'),
+          apiFetch<ClassBlock[]>(token, '/class-blocks'),
         ])
       setTerms(nextTerms)
       setCourses(nextCourses)
       setDisciplines(nextDisciplines)
       setCohorts(nextCohorts)
+      setBlocks(nextBlocks)
       setCohortForm((current) => ({
         ...current,
         term_id: current.term_id || nextTerms[0]?.id || '',
@@ -139,12 +157,14 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
     setError(null)
     setNotice(null)
     try {
-      await apiFetch<Term>(token, '/terms', {
-        method: 'POST',
+      const isEditing = editingTermId !== null
+      await apiFetch<Term>(token, isEditing ? '/terms/' + editingTermId : '/terms', {
+        method: isEditing ? 'PATCH' : 'POST',
         body: JSON.stringify(termForm),
       })
       setTermForm({ name: '', starts_on: '', ends_on: '' })
-      setNotice('Semestre criado como rascunho.')
+      setEditingTermId(null)
+      setNotice(isEditing ? 'Semestre atualizado.' : 'Semestre criado como rascunho.')
       await refresh()
     } catch (submitError) {
       setError(formError(submitError))
@@ -156,12 +176,14 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
     setError(null)
     setNotice(null)
     try {
-      await apiFetch<Course>(token, '/courses', {
-        method: 'POST',
+      const isEditing = editingCourseId !== null
+      await apiFetch<Course>(token, isEditing ? '/courses/' + editingCourseId : '/courses', {
+        method: isEditing ? 'PATCH' : 'POST',
         body: JSON.stringify(courseForm),
       })
       setCourseForm({ name: '', code: '' })
-      setNotice('Curso criado.')
+      setEditingCourseId(null)
+      setNotice(isEditing ? 'Curso atualizado.' : 'Curso criado.')
       await refresh()
     } catch (submitError) {
       setError(formError(submitError))
@@ -173,8 +195,9 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
     setError(null)
     setNotice(null)
     try {
-      await apiFetch<Discipline>(token, '/disciplines', {
-        method: 'POST',
+      const isEditing = editingDisciplineId !== null
+      await apiFetch<Discipline>(token, isEditing ? '/disciplines/' + editingDisciplineId : '/disciplines', {
+        method: isEditing ? 'PATCH' : 'POST',
         body: JSON.stringify(disciplineForm),
       })
       setDisciplineForm((current) => ({
@@ -182,7 +205,8 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
         name: '',
         code: '',
       }))
-      setNotice('Disciplina criada.')
+      setEditingDisciplineId(null)
+      setNotice(isEditing ? 'Disciplina atualizada.' : 'Disciplina criada.')
       await refresh()
     } catch (submitError) {
       setError(formError(submitError))
@@ -194,15 +218,17 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
     setError(null)
     setNotice(null)
     try {
-      await apiFetch<Cohort>(token, '/cohorts', {
-        method: 'POST',
+      const isEditing = editingCohortId !== null
+      await apiFetch<Cohort>(token, isEditing ? '/cohorts/' + editingCohortId : '/cohorts', {
+        method: isEditing ? 'PATCH' : 'POST',
         body: JSON.stringify({
           ...cohortForm,
           period: Number(cohortForm.period),
         }),
       })
       setCohortForm((current) => ({ ...current, label: '' }))
-      setNotice('Turma criada.')
+      setEditingCohortId(null)
+      setNotice(isEditing ? 'Turma atualizada.' : 'Turma criada.')
       await refresh()
     } catch (submitError) {
       setError(formError(submitError))
@@ -224,6 +250,7 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
       })
       setBlockForm((current) => ({ ...current, start_time: '', end_time: '' }))
       setNotice('Bloqueio academico adicionado.')
+      await refresh()
     } catch (submitError) {
       setError(formError(submitError))
     }
@@ -239,6 +266,40 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
     } catch (submitError) {
       setError(formError(submitError))
     }
+  }
+
+  async function deactivateAcademic(path: string, id: string, label: string) {
+    if (!window.confirm('Encerrar ou desativar ' + label + '? O historico sera preservado.')) return
+    setError(null)
+    setNotice(null)
+    try {
+      await apiFetch(token, path + '/' + id + '/deactivate', { method: 'POST' })
+      setNotice(label + ' encerrado.')
+      await refresh()
+    } catch (actionError) {
+      setError(formError(actionError))
+    }
+  }
+
+  function editTerm(term: Term) {
+    if (term.status === 'CLOSED') return
+    setEditingTermId(term.id)
+    setTermForm({ name: term.name, starts_on: term.starts_on, ends_on: term.ends_on })
+  }
+
+  function editCourse(course: Course) {
+    setEditingCourseId(course.id)
+    setCourseForm({ name: course.name, code: course.code })
+  }
+
+  function editDiscipline(discipline: Discipline) {
+    setEditingDisciplineId(discipline.id)
+    setDisciplineForm({ course_id: discipline.course_id, name: discipline.name, code: discipline.code, kind: discipline.kind })
+  }
+
+  function editCohort(cohort: Cohort) {
+    setEditingCohortId(cohort.id)
+    setCohortForm({ term_id: cohort.term_id, course_id: cohort.course_id, period: String(cohort.period), label: cohort.label })
   }
 
   return (
@@ -279,7 +340,8 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
                     <input autoComplete='off' id='term-end' name='ends_on' type='date' required value={termForm.ends_on} onChange={(event) => setTermForm({ ...termForm, ends_on: event.target.value })} />
                   </div>
                 </div>
-                <button className='button button-primary' type='submit'>Criar semestre</button>
+                <button className='button button-primary' type='submit'>{editingTermId ? 'Salvar semestre' : 'Criar semestre'}</button>
+                {editingTermId && <button className='text-button' type='button' onClick={() => { setEditingTermId(null); setTermForm({ name: '', starts_on: '', ends_on: '' }) }}>Cancelar edição</button>}
               </form>
               <ul className='resource-list'>
                 {terms.map((term) => (
@@ -287,7 +349,9 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
                     <span><strong>{term.name}</strong><small>{displayDate(term.starts_on)} a {displayDate(term.ends_on)}</small></span>
                     <span className='resource-actions'>
                       <span className={'status-pill status-' + term.status.toLowerCase()}>{statusLabel(term.status)}</span>
-                      {term.status !== 'ACTIVE' && term.status !== 'CLOSED' && <button className='text-button' type='button' onClick={() => void activateTerm(term)}>Ativar</button>}
+                      {term.status !== 'CLOSED' && <button className='text-button' type='button' onClick={() => editTerm(term)}>Editar</button>}
+                      {term.status === 'DRAFT' && <button className='text-button' type='button' onClick={() => void activateTerm(term)}>Ativar</button>}
+                      {term.status === 'ACTIVE' && <button className='text-button' type='button' onClick={() => void deactivateAcademic('/terms', term.id, 'Semestre')}>Encerrar</button>}
                     </span>
                   </li>
                 ))}
@@ -311,7 +375,8 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
                   <input autoComplete='off' id='course-name' name='name' required value={courseForm.name} onChange={(event) => setCourseForm({ ...courseForm, name: event.target.value })} />
                   <label htmlFor='course-code'>Codigo do curso</label>
                   <input autoComplete='off' id='course-code' name='code' required value={courseForm.code} onChange={(event) => setCourseForm({ ...courseForm, code: event.target.value })} />
-                  <button className='button button-secondary' type='submit'>Criar curso</button>
+                  <button className='button button-secondary' type='submit'>{editingCourseId ? 'Salvar curso' : 'Criar curso'}</button>
+                  {editingCourseId && <button className='text-button' type='button' onClick={() => { setEditingCourseId(null); setCourseForm({ name: '', code: '' }) }}>Cancelar edição</button>}
                 </form>
                 <form autoComplete='off' className='compact-form' onSubmit={createDiscipline}>
                   <label htmlFor='discipline-course'>Curso da disciplina</label>
@@ -334,9 +399,30 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
                       </select>
                     </div>
                   </div>
-                  <button className='button button-secondary' type='submit'>Criar disciplina</button>
+                  <button className='button button-secondary' type='submit'>{editingDisciplineId ? 'Salvar disciplina' : 'Criar disciplina'}</button>
+                  {editingDisciplineId && <button className='text-button' type='button' onClick={() => { setEditingDisciplineId(null); setDisciplineForm({ course_id: courses[0]?.id ?? '', name: '', code: '', kind: 'DISCIPLINE' }) }}>Cancelar edição</button>}
                 </form>
               </div>
+              <ul className='resource-list'>
+                {courses.map((course) => (
+                  <li key={course.id}>
+                    <span><strong>{course.name}</strong><small>{course.code} · {course.is_active ? 'Ativo' : 'Desativado'}</small></span>
+                    <span className='resource-actions'>
+                      {course.is_active && <button className='text-button' type='button' onClick={() => editCourse(course)}>Editar</button>}
+                      {course.is_active && <button className='text-button' type='button' onClick={() => void deactivateAcademic('/courses', course.id, 'Curso')}>Desativar</button>}
+                    </span>
+                  </li>
+                ))}
+                {disciplines.map((discipline) => (
+                  <li key={discipline.id}>
+                    <span><strong>{discipline.name}</strong><small>{discipline.code} · {discipline.kind === 'INTERNSHIP' ? 'Estagio' : 'Disciplina'} · {courses.find((course) => course.id === discipline.course_id)?.name ?? 'Curso'} · {discipline.is_active ? 'Ativa' : 'Desativada'}</small></span>
+                    <span className='resource-actions'>
+                      {discipline.is_active && <button className='text-button' type='button' onClick={() => editDiscipline(discipline)}>Editar</button>}
+                      {discipline.is_active && <button className='text-button' type='button' onClick={() => void deactivateAcademic('/disciplines', discipline.id, 'Disciplina')}>Desativar</button>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </article>
           </div>
 
@@ -373,8 +459,20 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
                     <input autoComplete='off' id='cohort-label' name='label' required value={cohortForm.label} onChange={(event) => setCohortForm({ ...cohortForm, label: event.target.value })} />
                   </div>
                 </div>
-                <button className='button button-secondary' type='submit'>Criar turma</button>
+                <button className='button button-secondary' type='submit'>{editingCohortId ? 'Salvar turma' : 'Criar turma'}</button>
+                {editingCohortId && <button className='text-button' type='button' onClick={() => { setEditingCohortId(null); setCohortForm({ term_id: terms[0]?.id ?? '', course_id: courses[0]?.id ?? '', period: '1', label: '' }) }}>Cancelar edição</button>}
               </form>
+              <ul className='resource-list'>
+                {cohorts.map((cohort) => (
+                  <li key={cohort.id}>
+                    <span><strong>{cohort.label}</strong><small>{courses.find((course) => course.id === cohort.course_id)?.name ?? 'Curso'} · periodo {cohort.period} · {cohort.is_active ? 'Ativa' : 'Desativada'}</small></span>
+                    <span className='resource-actions'>
+                      {cohort.is_active && <button className='text-button' type='button' onClick={() => editCohort(cohort)}>Editar</button>}
+                      {cohort.is_active && <button className='text-button' type='button' onClick={() => void deactivateAcademic('/cohorts', cohort.id, 'Turma')}>Desativar</button>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
               <form autoComplete='off' className='compact-form form-divider' onSubmit={createBlock}>
                 <label htmlFor='block-cohort'>Turma do bloqueio</label>
                 <select id='block-cohort' name='cohort_id' required value={blockForm.cohort_id} onChange={(event) => setBlockForm({ ...blockForm, cohort_id: event.target.value })}>
@@ -408,6 +506,15 @@ export function AcademicAdminPage({ token }: AuthenticatedProps) {
                 <p className='field-help'>Fuso institucional: America/Sao_Paulo. Intervalos usam [inicio, fim).</p>
                 <button className='button button-secondary' type='submit'>Adicionar bloqueio</button>
               </form>
+              <ul className='resource-list'>
+                {blocks.map((block) => (
+                  <li key={block.id}>
+                    <span><strong>{cohorts.find((cohort) => cohort.id === block.cohort_id)?.label ?? 'Turma'}</strong><small>{block.discipline_id ? disciplines.find((discipline) => discipline.id === block.discipline_id)?.name : 'Todos os vinculos'} · {weekdayLabels[block.weekday]} · {displayTime(block.start_time)}-{displayTime(block.end_time)}</small></span>
+                    <span className='status-pill status-active'>Ativo</span>
+                  </li>
+                ))}
+                {blocks.length === 0 && <li><span className='field-help'>Nenhum bloqueio academico cadastrado.</span></li>}
+              </ul>
             </article>
           </div>
         </div>
@@ -639,6 +746,176 @@ export function AvailabilityPage({ token }: AuthenticatedProps) {
               {isSaving ? 'Salvando\u2026' : 'Salvar disponibilidade'}
             </button>
           </div>
+        </form>
+      )}
+    </section>
+  )
+}
+
+type ManagedStudent = { user_id: string; registration: string; full_name: string }
+type ManagedSupervisor = { user_id: string; full_name: string; professional_area: string; max_students_default: number }
+
+export function MasterAvailabilityPage({ token }: AuthenticatedProps) {
+  const [terms, setTerms] = useState<Term[]>([])
+  const [students, setStudents] = useState<ManagedStudent[]>([])
+  const [supervisors, setSupervisors] = useState<ManagedSupervisor[]>([])
+  const [ownerType, setOwnerType] = useState<'STUDENT' | 'SUPERVISOR'>('STUDENT')
+  const [selectedUserId, setSelectedUserId] = useState('')
+  const [selectedTermId, setSelectedTermId] = useState('')
+  const [intervals, setIntervals] = useState<Interval[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  const loadAvailability = useCallback(async (nextOwnerType: 'STUDENT' | 'SUPERVISOR', nextUserId: string, nextTermId: string) => {
+    if (!nextUserId || !nextTermId) {
+      setIntervals([])
+      return
+    }
+    const response = await apiFetch<Availability>(token, `/managed-availability?user_id=${encodeURIComponent(nextUserId)}&owner_type=${nextOwnerType}&term_id=${encodeURIComponent(nextTermId)}`)
+    setIntervals(response.intervals.map((interval) => ({ ...interval, start_time: displayTime(interval.start_time), end_time: displayTime(interval.end_time) })))
+  }, [token])
+
+  const loadPage = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const [nextTerms, nextStudents, nextSupervisors] = await Promise.all([
+        apiFetch<Term[]>(token, '/terms'),
+        apiFetch<ManagedStudent[]>(token, '/students'),
+        apiFetch<ManagedSupervisor[]>(token, '/supervisors'),
+      ])
+      const editableTerms = nextTerms.filter((term) => term.status !== 'CLOSED')
+      const nextUserId = nextStudents[0]?.user_id ?? nextSupervisors[0]?.user_id ?? ''
+      const nextOwnerType = nextStudents.length > 0 ? 'STUDENT' : 'SUPERVISOR'
+      const nextTermId = editableTerms[0]?.id ?? ''
+      setTerms(editableTerms)
+      setStudents(nextStudents)
+      setSupervisors(nextSupervisors)
+      setOwnerType(nextOwnerType)
+      setSelectedUserId(nextUserId)
+      setSelectedTermId(nextTermId)
+      await loadAvailability(nextOwnerType, nextUserId, nextTermId)
+    } catch (loadError) {
+      setError(formError(loadError))
+    } finally {
+      setIsLoading(false)
+    }
+  }, [loadAvailability, token])
+
+  useEffect(() => {
+    void loadPage()
+  }, [loadPage])
+
+  async function selectTarget(nextOwnerType: 'STUDENT' | 'SUPERVISOR', nextUserId: string) {
+    setOwnerType(nextOwnerType)
+    setSelectedUserId(nextUserId)
+    setError(null)
+    setNotice(null)
+    try {
+      await loadAvailability(nextOwnerType, nextUserId, selectedTermId)
+    } catch (loadError) {
+      setError(formError(loadError))
+    }
+  }
+
+  async function selectTerm(nextTermId: string) {
+    setSelectedTermId(nextTermId)
+    setError(null)
+    setNotice(null)
+    try {
+      await loadAvailability(ownerType, selectedUserId, nextTermId)
+    } catch (loadError) {
+      setError(formError(loadError))
+    }
+  }
+
+  function updateInterval(index: number, changes: Partial<Interval>) {
+    setIntervals((current) => current.map((interval, intervalIndex) => intervalIndex === index ? { ...interval, ...changes } : interval))
+  }
+
+  function addInterval() {
+    setIntervals((current) => [...current, { weekday: 1, start_time: '08:00', end_time: '10:00', time_zone: 'America/Sao_Paulo' }])
+  }
+
+  function removeInterval(index: number) {
+    setIntervals((current) => current.filter((_, intervalIndex) => intervalIndex !== index))
+  }
+
+  async function saveAvailability(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedUserId || !selectedTermId) {
+      setError('Escolha o perfil e o semestre antes de salvar.')
+      return
+    }
+    setIsSaving(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const response = await apiFetch<Availability>(token, '/managed-availability', {
+        method: 'PUT',
+        body: JSON.stringify({
+          user_id: selectedUserId,
+          owner_type: ownerType,
+          term_id: selectedTermId,
+          intervals: intervals.map((interval) => ({ ...interval, time_zone: 'America/Sao_Paulo' })),
+        }),
+      })
+      setIntervals(response.intervals.map((interval) => ({ ...interval, start_time: displayTime(interval.start_time), end_time: displayTime(interval.end_time) })))
+      setNotice('Disponibilidade do perfil atualizada.')
+    } catch (saveError) {
+      setError(formError(saveError))
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const targetOptions = ownerType === 'STUDENT' ? students : supervisors
+
+  return (
+    <section className='private-content availability-page' aria-labelledby='master-availability-page-title'>
+      <p className='eyebrow'>Gestao administrativa</p>
+      <h1 id='master-availability-page-title'>Disponibilidade de pessoas</h1>
+      <p className='private-intro'>Selecione um estudante ou supervisor para manter a disponibilidade semanal do semestre.</p>
+      {error && <p className='form-error' role='alert'>{error}</p>}
+      {notice && <p className='form-notice' role='status'>{notice}</p>}
+      {isLoading ? <p className='loading-message' role='status'>Carregando disponibilidades...</p> : terms.length === 0 ? (
+        <article className='private-card academic-card'><h2>Nenhum semestre editavel</h2><p>Crie ou ative um semestre antes de gerenciar disponibilidades.</p></article>
+      ) : (
+        <form autoComplete='off' className='private-card availability-form' onSubmit={saveAvailability}>
+          <div className='form-grid'>
+            <div>
+              <label htmlFor='master-availability-owner-type'>Perfil</label>
+              <select id='master-availability-owner-type' value={ownerType} onChange={(event) => { const nextType = event.target.value as 'STUDENT' | 'SUPERVISOR'; const nextUser = nextType === 'STUDENT' ? students[0]?.user_id ?? '' : supervisors[0]?.user_id ?? ''; void selectTarget(nextType, nextUser) }}>
+                <option value='STUDENT'>Estudante</option>
+                <option value='SUPERVISOR'>Supervisor</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor='master-availability-user'>Pessoa</label>
+              <select id='master-availability-user' value={selectedUserId} onChange={(event) => void selectTarget(ownerType, event.target.value)}>
+                <option value=''>Selecione</option>
+                {targetOptions.map((person) => <option key={person.user_id} value={person.user_id}>{person.full_name}{'registration' in person ? ' - ' + person.registration : ''}</option>)}
+              </select>
+            </div>
+          </div>
+          <label htmlFor='master-availability-term'>Semestre</label>
+          <select id='master-availability-term' value={selectedTermId} onChange={(event) => void selectTerm(event.target.value)}>
+            {terms.map((term) => <option key={term.id} value={term.id}>{term.name} - {statusLabel(term.status)}</option>)}
+          </select>
+          <p className='field-help'>Use America/Sao_Paulo. Intervalos adjacentes sao permitidos; sobreposicoes sao rejeitadas pela API.</p>
+          <div className='availability-list'>
+            {intervals.map((interval, index) => (
+              <div className='availability-row' key={`${index}-${interval.weekday}`}>
+                <div><label htmlFor={`master-availability-day-${index}`}>Dia</label><select id={`master-availability-day-${index}`} value={interval.weekday} onChange={(event) => updateInterval(index, { weekday: Number(event.target.value) })}>{weekdayLabels.map((label, weekday) => <option key={label} value={weekday}>{label}</option>)}</select></div>
+                <div><label htmlFor={`master-availability-start-${index}`}>Inicio</label><input id={`master-availability-start-${index}`} type='time' value={interval.start_time} onChange={(event) => updateInterval(index, { start_time: event.target.value })} required /></div>
+                <div><label htmlFor={`master-availability-end-${index}`}>Fim</label><input id={`master-availability-end-${index}`} type='time' value={interval.end_time} onChange={(event) => updateInterval(index, { end_time: event.target.value })} required /></div>
+                <button className='text-button' type='button' onClick={() => removeInterval(index)}>Remover</button>
+              </div>
+            ))}
+          </div>
+          <div className='availability-actions'><button className='button button-secondary' type='button' onClick={addInterval}>Adicionar intervalo</button><button className='button button-primary' type='submit' disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar disponibilidade'}</button></div>
         </form>
       )}
     </section>

@@ -107,3 +107,6 @@ Nenhuma bloqueante para o MVP. Reservas de risco exigem decisao humana.
   rotas de alocacao/cancelamento existentes.
 - A API continua sendo a fonte de verdade para elegibilidade, compatibilidade,
   disponibilidade e capacidade. A interface nao duplica essas regras.
+- O supervisor consulta os estudantes alocados em cada sessao por uma rota
+  protegida pelo mesmo escopo da sessao. A resposta traz somente nome,
+  matricula, situacao e motivo de suspensao.

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { AuthenticatedProps } from '../academics/academics'
 import { apiFetch } from '../../lib/api'
@@ -41,6 +41,21 @@ type AuditResponse = {
   total: number
   page: number
   page_size: number
+}
+
+type AuditActor = {
+  id: string
+  email: string
+  role: 'MASTER' | 'SUPERVISOR' | 'STUDENT'
+  is_active: boolean
+}
+
+type AuditFilters = {
+  actor_user_id: string
+  action: string
+  target_type: string
+  from: string
+  to: string
 }
 
 type RiskAppointment = {
@@ -98,6 +113,10 @@ function formatAlert(value: string): string {
 
 function formatRiskCause(value: string): string {
   return riskCauseLabels[value] ?? humanizeCode(value)
+}
+
+function apiDateTime(value: string): string {
+  return value ? value + ':00-03:00' : ''
 }
 
 function AuditEventsList({ audit }: { audit: AuditResponse | null }) {
@@ -255,14 +274,22 @@ export function AdminDashboardPage({ token }: AuthenticatedProps) {
 
 export function AdminAuditPage({ token }: AuthenticatedProps) {
   const [audit, setAudit] = useState<AuditResponse | null>(null)
+  const [actors, setActors] = useState<AuditActor[]>([])
+  const [filters, setFilters] = useState<AuditFilters>({ actor_user_id: '', action: '', target_type: '', from: '', to: '' })
+  const [pageSize, setPageSize] = useState(8)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
-    apiFetch<AuditResponse>(token, '/audit-events?page_size=8')
-      .then((result) => {
-        if (active) setAudit(result)
+    Promise.all([
+      apiFetch<AuditActor[]>(token, '/users'),
+      apiFetch<AuditResponse>(token, '/audit-events?page=1&page_size=8'),
+    ])
+      .then(([actorResult, auditResult]) => {
+        if (!active) return
+        setActors(actorResult)
+        setAudit(auditResult)
       })
       .catch((requestError) => {
         if (active) setError(errorMessage(requestError))
@@ -275,6 +302,29 @@ export function AdminAuditPage({ token }: AuthenticatedProps) {
       active = false
     }
   }, [token])
+
+  async function loadAudit(nextPage: number, currentFilters = filters, currentPageSize = pageSize) {
+    setIsLoading(true)
+    setError(null)
+    const query = new URLSearchParams({ page: String(nextPage), page_size: String(currentPageSize) })
+    if (currentFilters.actor_user_id) query.set('actor_user_id', currentFilters.actor_user_id)
+    if (currentFilters.action.trim()) query.set('action', currentFilters.action.trim())
+    if (currentFilters.target_type.trim()) query.set('target_type', currentFilters.target_type.trim())
+    if (currentFilters.from) query.set('from', apiDateTime(currentFilters.from))
+    if (currentFilters.to) query.set('to', apiDateTime(currentFilters.to))
+    try {
+      setAudit(await apiFetch<AuditResponse>(token, '/audit-events?' + query.toString()))
+    } catch (requestError) {
+      setError(errorMessage(requestError))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  function submitFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    void loadAudit(1)
+  }
 
   return (
     <section className='private-content admin-page audit-page' aria-labelledby='audit-page-title'>
@@ -294,6 +344,42 @@ export function AdminAuditPage({ token }: AuthenticatedProps) {
         </Link>
       </div>
 
+      <form className='private-card audit-filters' onSubmit={submitFilters}>
+        <div className='card-heading'><div><p className='eyebrow'>Consulta</p><h2>Filtrar eventos</h2></div></div>
+        <div className='form-grid'>
+          <div>
+            <label htmlFor='audit-actor'>Ator</label>
+            <select id='audit-actor' value={filters.actor_user_id} onChange={(event) => setFilters({ ...filters, actor_user_id: event.target.value })}>
+              <option value=''>Todos os atores</option>
+              {actors.map((actor) => <option key={actor.id} value={actor.id}>{actor.email} - {actor.role}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor='audit-action'>Acao</label>
+            <input id='audit-action' value={filters.action} placeholder='Ex.: USER_DEACTIVATED' onChange={(event) => setFilters({ ...filters, action: event.target.value })} />
+          </div>
+          <div>
+            <label htmlFor='audit-target'>Alvo</label>
+            <input id='audit-target' value={filters.target_type} placeholder='Ex.: user' onChange={(event) => setFilters({ ...filters, target_type: event.target.value })} />
+          </div>
+          <div>
+            <label htmlFor='audit-from'>De</label>
+            <input id='audit-from' type='datetime-local' value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} />
+          </div>
+          <div>
+            <label htmlFor='audit-to'>Ate</label>
+            <input id='audit-to' type='datetime-local' value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} />
+          </div>
+          <div>
+            <label htmlFor='audit-page-size'>Eventos por pagina</label>
+            <select id='audit-page-size' value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
+              <option value='8'>8</option><option value='25'>25</option><option value='50'>50</option><option value='100'>100</option>
+            </select>
+          </div>
+        </div>
+        <button className='button button-primary' type='submit'>Aplicar filtros</button>
+      </form>
+
       {isLoading && <p className='loading-message' role='status'>Carregando auditoria...</p>}
       {error && <p className='form-error' role='alert'>{error}</p>}
       {audit && (
@@ -302,6 +388,11 @@ export function AdminAuditPage({ token }: AuthenticatedProps) {
             Mostrando {audit.items.length} de {audit.total} evento{audit.total === 1 ? '' : 's'} mais recente{audit.total === 1 ? '' : 's'}.
           </p>
           <AuditEventsList audit={audit} />
+          <div className='resource-actions audit-pagination'>
+            <button className='text-button' type='button' disabled={audit.page <= 1 || isLoading} onClick={() => void loadAudit(audit.page - 1)}>Anterior</button>
+            <span className='field-help'>Pagina {audit.page} - {audit.total} evento{audit.total === 1 ? '' : 's'}</span>
+            <button className='text-button' type='button' disabled={audit.page * audit.page_size >= audit.total || isLoading} onClick={() => void loadAudit(audit.page + 1)}>Proxima</button>
+          </div>
         </article>
       )}
     </section>

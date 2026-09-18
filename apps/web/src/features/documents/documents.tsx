@@ -35,6 +35,7 @@ type Review = {
   mime_type: string
   size_bytes: number
   status: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'EXPIRED'
+  expires_required: boolean
 }
 
 function errorMessage(error: unknown): string {
@@ -61,6 +62,7 @@ export function StudentDocumentsPage({ token }: AuthenticatedProps) {
   const [checklist, setChecklist] = useState<Checklist | null>(null)
   const [selectedFiles, setSelectedFiles] = useState<Record<string, File>>({})
   const [isLoading, setIsLoading] = useState(true)
+  const [isChecklistLoading, setIsChecklistLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -85,8 +87,13 @@ export function StudentDocumentsPage({ token }: AuthenticatedProps) {
   }, [token])
 
   useEffect(() => {
-    if (!termId) return
+    if (!termId) {
+      setChecklist(null)
+      setIsChecklistLoading(false)
+      return
+    }
     let cancelled = false
+    setIsChecklistLoading(true)
     setError(null)
     apiFetch<Checklist>(token, '/me/document-requirements?term_id=' + termId)
       .then((response) => {
@@ -95,6 +102,9 @@ export function StudentDocumentsPage({ token }: AuthenticatedProps) {
       .catch((requestError) => {
         if (!cancelled) setError(errorMessage(requestError))
       })
+      .finally(() => {
+        if (!cancelled) setIsChecklistLoading(false)
+      })
     return () => {
       cancelled = true
     }
@@ -102,11 +112,16 @@ export function StudentDocumentsPage({ token }: AuthenticatedProps) {
 
   async function refreshChecklist() {
     if (!termId) return
-    const response = await apiFetch<Checklist>(
-      token,
-      '/me/document-requirements?term_id=' + termId,
-    )
-    setChecklist(response)
+    setIsChecklistLoading(true)
+    try {
+      const response = await apiFetch<Checklist>(
+        token,
+        '/me/document-requirements?term_id=' + termId,
+      )
+      setChecklist(response)
+    } finally {
+      setIsChecklistLoading(false)
+    }
   }
 
   async function submitDocument(event: FormEvent<HTMLFormElement>, requirementId: string) {
@@ -138,10 +153,24 @@ export function StudentDocumentsPage({ token }: AuthenticatedProps) {
     }
   }
 
+  async function download(submissionId: string) {
+    try {
+      const blob = await apiDownload(token, '/document-submissions/' + submissionId + '/content')
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = 'documento'
+      anchor.click()
+      URL.revokeObjectURL(url)
+    } catch (requestError) {
+      setError(errorMessage(requestError))
+    }
+  }
+
   return (
-    <section className='private-content documents-page' aria-labelledby='availability-page-title'>
+    <section className='private-content documents-page' aria-labelledby='student-documents-page-title'>
       <p className='eyebrow'>Elegibilidade</p>
-      <h1 id='availability-page-title'>Meus documentos</h1>
+      <h1 id='student-documents-page-title'>Meus documentos</h1>
       <p className='private-intro'>
         Mantenha seu checklist atualizado para participar das sessoes compativeis.
       </p>
@@ -160,8 +189,8 @@ export function StudentDocumentsPage({ token }: AuthenticatedProps) {
       </div>
       {error && <p className='form-error' role='alert'>{error}</p>}
       {notice && <p className='form-notice' role='status'>{notice}</p>}
-      {isLoading && <p className='loading-message'>Carregando checklist...</p>}
-      {!isLoading && checklist && (
+      {(isLoading || isChecklistLoading) && <p className='loading-message' role='status' aria-live='polite'>Carregando checklist...</p>}
+      {!isLoading && !isChecklistLoading && checklist && (
         <div className='document-grid'>
           {checklist.items.map((item) => (
             <article className='private-card document-card' key={item.requirement_id}>
@@ -191,6 +220,15 @@ export function StudentDocumentsPage({ token }: AuthenticatedProps) {
               {item.status === 'PENDING_REVIEW' && <p className='field-help'>Seu arquivo esta na fila de revisao.</p>}
               {item.status === 'APPROVED' && item.expires_at && (
                 <p className='field-help'>Valido ate {new Date(item.expires_at).toLocaleDateString('pt-BR')}.</p>
+              )}
+              {item.latest_submission_id && (
+                <button
+                  className='text-button'
+                  type='button'
+                  onClick={() => void download(item.latest_submission_id as string)}
+                >
+                  Baixar ultimo arquivo
+                </button>
               )}
             </article>
           ))}
@@ -222,6 +260,11 @@ export function SupervisorDocumentsPage({ token }: AuthenticatedProps) {
   async function approve(reviewId: string) {
     setError(null)
     setNotice(null)
+    const review = reviews.find((item) => item.id === reviewId)
+    if (review?.expires_required && !expiryDates[reviewId]) {
+      setError('Informe a data de validade antes de aprovar este requisito.')
+      return
+    }
     try {
       await apiFetch(token, '/document-submissions/' + reviewId + '/approve', {
         method: 'POST',
@@ -271,15 +314,15 @@ export function SupervisorDocumentsPage({ token }: AuthenticatedProps) {
   }
 
   return (
-    <section className='private-content documents-page' aria-labelledby='availability-page-title'>
+    <section className='private-content documents-page' aria-labelledby='supervisor-documents-page-title'>
       <p className='eyebrow'>Revisao documental</p>
-      <h1 id='availability-page-title'>Fila de documentos</h1>
+      <h1 id='supervisor-documents-page-title'>Fila de documentos</h1>
       <p className='private-intro'>
         Revise somente documentos dos estudantes dentro do seu escopo ativo.
       </p>
       {error && <p className='form-error' role='alert'>{error}</p>}
       {notice && <p className='form-notice' role='status'>{notice}</p>}
-      {isLoading && <p className='loading-message'>Carregando fila...</p>}
+      {isLoading && <p className='loading-message' role='status' aria-live='polite'>Carregando fila...</p>}
       {!isLoading && reviews.length === 0 && <p className='field-help'>Nenhum documento pendente no seu escopo.</p>}
       <div className='document-grid'>
         {reviews.map((review) => (
@@ -294,10 +337,13 @@ export function SupervisorDocumentsPage({ token }: AuthenticatedProps) {
             <p className='document-meta'><strong>{review.requirement_name}</strong> · {review.original_name} · {Math.ceil(review.size_bytes / 1024)} KB</p>
             <div className='review-actions'>
               <button className='text-button' type='button' onClick={() => void download(review.id)}>Baixar arquivo</button>
-              <label htmlFor={'expiry-' + review.id}>Validade opcional</label>
+              <label htmlFor={'expiry-' + review.id}>
+                Validade {review.expires_required ? 'obrigatoria' : 'opcional'}
+              </label>
               <input
                 id={'expiry-' + review.id}
                 type='date'
+                required={review.expires_required}
                 value={expiryDates[review.id] ?? ''}
                 onChange={(event) => setExpiryDates((current) => ({ ...current, [review.id]: event.target.value }))}
               />

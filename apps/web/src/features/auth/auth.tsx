@@ -7,13 +7,18 @@ import {
   type ReactNode,
 } from 'react'
 import { Link, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { AcademicAdminPage, AvailabilityPage } from '../academics/academics'
+import { AcademicAdminPage, AvailabilityPage, MasterAvailabilityPage } from '../academics/academics'
 import { ClinicAdminPage } from '../clinics/clinics'
 import { StudentDocumentsPage, SupervisorDocumentsPage } from '../documents/documents'
 import { SchedulingPage } from '../scheduling/scheduling'
 import { StudentSessionsPage } from '../scheduling/student-sessions'
 import { AdminAuditPage, AdminDashboardPage } from '../admin/admin'
 import { RoleJourney, RoleStartPage, StudentJourneyPage } from '../journey/journey'
+import { MasterHomePage } from '../master/master-home'
+import { MasterPeoplePage } from '../master/people'
+import { MasterDocumentsPage } from '../master/documents'
+import { MasterSessionsPage } from '../master/sessions'
+import { StudentProfilePage } from '../profile/profile'
 
 export type UserRole = 'MASTER' | 'SUPERVISOR' | 'STUDENT'
 
@@ -62,9 +67,13 @@ type NavigationItem = {
 
 const roleNavigation: Record<UserRole, readonly NavigationItem[]> = {
   MASTER: [
-    { label: 'Visão geral', path: '/app/visao-geral' },
+    { label: 'Central de operação', path: '/app' },
     { label: 'Semestres', path: '/app/semestres' },
+    { label: 'Pessoas e vínculos', path: '/app/pessoas' },
     { label: 'Clínicas', path: '/app/clinicas' },
+    { label: 'Disponibilidades', path: '/app/disponibilidades' },
+    { label: 'Documentos', path: '/app/documentos' },
+    { label: 'Sessões', path: '/app/sessoes-master' },
     { label: 'Auditoria', path: '/app/auditoria' },
   ],
   SUPERVISOR: [
@@ -73,6 +82,7 @@ const roleNavigation: Record<UserRole, readonly NavigationItem[]> = {
     { label: 'Documentos', path: '/app/documentos' },
   ],
   STUDENT: [
+    { label: 'Meu perfil', path: '/app/perfil' },
     { label: 'Documentos', path: '/app/documentos' },
     { label: 'Minha disponibilidade', path: '/app/minha-disponibilidade' },
     { label: 'Sessões disponíveis', path: '/app/sessoes-disponiveis' },
@@ -229,12 +239,24 @@ function PrivateShell() {
     navigate('/login')
   }
 
-  const customPage = token && user.role === 'MASTER' && location.pathname === '/app/semestres'
-    ? <AcademicAdminPage token={token} />
-    : token && user.role === 'MASTER' && location.pathname === '/app/clinicas'
-      ? <ClinicAdminPage token={token} />
+  const customPage = token && user.role === 'MASTER' && location.pathname === '/app'
+    ? <MasterHomePage token={token} />
+    : token && user.role === 'MASTER' && location.pathname === '/app/semestres'
+      ? <AcademicAdminPage token={token} />
+      : token && user.role === 'MASTER' && location.pathname === '/app/pessoas'
+        ? <MasterPeoplePage token={token} currentUserId={user.id} />
+      : token && user.role === 'MASTER' && location.pathname === '/app/clinicas'
+        ? <ClinicAdminPage token={token} />
+        : token && user.role === 'MASTER' && location.pathname === '/app/disponibilidades'
+          ? <MasterAvailabilityPage token={token} />
+        : token && user.role === 'MASTER' && location.pathname === '/app/documentos'
+          ? <MasterDocumentsPage token={token} />
+          : token && user.role === 'MASTER' && location.pathname === '/app/sessoes-master'
+            ? <MasterSessionsPage token={token} />
       : token && (user.role === 'STUDENT' || user.role === 'SUPERVISOR') && location.pathname === '/app/minha-disponibilidade'
       ? <AvailabilityPage token={token} />
+      : token && user.role === 'STUDENT' && location.pathname === '/app/perfil'
+        ? <StudentProfilePage token={token} />
       : token && user.role === 'STUDENT' && location.pathname === '/app/documentos'
         ? <StudentDocumentsPage token={token} />
       : token && user.role === 'SUPERVISOR' && location.pathname === '/app/documentos'
@@ -252,21 +274,37 @@ function PrivateShell() {
       : null
 
   const mainTitleId = customPage
-    ? location.pathname === '/app/semestres'
-      ? 'academic-page-title'
+    ? location.pathname === '/app'
+      ? 'master-home-title'
+      : location.pathname === '/app/semestres'
+        ? 'academic-page-title'
+        : location.pathname === '/app/pessoas'
+          ? 'master-people-title'
       : location.pathname === '/app/clinicas'
-        ? 'clinic-page-title'
+          ? 'clinic-page-title'
+          : location.pathname === '/app/disponibilidades'
+            ? 'master-availability-page-title'
+          : location.pathname === '/app/documentos'
+            ? user.role === 'MASTER'
+              ? 'master-documents-title'
+              : user.role === 'SUPERVISOR'
+                ? 'supervisor-documents-page-title'
+                : 'student-documents-page-title'
+            : location.pathname === '/app/sessoes-master'
+              ? 'master-sessions-title'
           : location.pathname === '/app/sessoes'
             ? 'scheduling-page-title'
           : location.pathname === '/app/sessoes-disponiveis'
             ? 'student-sessions-page-title'
+          : location.pathname === '/app/perfil'
+            ? 'student-profile-page-title'
           : location.pathname === '/app/visao-geral'
             ? 'admin-page-title'
-            : location.pathname === '/app/auditoria'
-              ? 'audit-page-title'
-              : location.pathname === '/app/minha-jornada'
-                ? 'student-journey-page-title'
-                : 'availability-page-title'
+              : location.pathname === '/app/auditoria'
+                  ? 'audit-page-title'
+                  : location.pathname === '/app/minha-jornada'
+                    ? 'student-journey-page-title'
+                    : 'availability-page-title'
     : 'private-title'
 
   return (
@@ -285,7 +323,7 @@ function PrivateShell() {
           {navigation.map((item) => (
             <NavLink
               className={({ isActive }) => (isActive ? 'private-nav-link active' : 'private-nav-link')}
-              end={item.path === '/app/visao-geral' || item.path === '/app/minha-jornada'}
+              end={item.path === '/app' || item.path === '/app/minha-jornada'}
               key={item.path}
               to={item.path}
             >

@@ -345,6 +345,7 @@ async def list_document_reviews(
                 student_name=student.full_name,
                 requirement_name=requirement.name,
                 discipline_id=requirement.discipline_id,
+                expires_required=requirement.expires_required,
             )
         )
     return reviews

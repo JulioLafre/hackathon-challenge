@@ -90,3 +90,10 @@ suspensao de alocacoes e a sinalizacao de reservas serao implementadas nas
 TASK-006/TASK-007, pois essas entidades ainda nao existem no modelo atual.
 Enquanto essas tarefas nao forem concluidas, nao ha alocacao ou reserva que
 possa ser suspensa por expiracao.
+
+## Decisao de interface - download e validade
+
+O checklist do estudante exibe uma acao para baixar o ultimo arquivo submetido
+pela rota privada ja existente. A fila de revisao recebe `expires_required`
+junto do requisito para diferenciar validade opcional de obrigatoria antes da
+aprovacao; a regra continua sendo validada no backend.

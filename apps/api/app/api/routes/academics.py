@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ApiError
 from app.db.models import (
     AcademicTerm,
+    AuditEvent,
     ClassBlock,
     Cohort,
     Course,
@@ -25,6 +26,7 @@ from app.db.models import (
 from app.modules.academics.schemas import (
     AvailabilityRead,
     AvailabilityUpdate,
+    ManagedAvailabilityUpdate,
     ClassBlockCreate,
     ClassBlockRead,
     CohortCreate,
@@ -40,6 +42,7 @@ from app.modules.academics.schemas import (
     StudentAcademicLinkCreate,
     StudentAcademicLinkRead,
     StudentCreate,
+    StudentProfileUpdate,
     StudentRead,
     SupervisorCreate,
     SupervisorRead,
@@ -58,6 +61,7 @@ from app.modules.auth.dependencies import (
 
 router = APIRouter(tags=['academics'])
 MasterUser = Annotated[User, Depends(require_roles(Role.MASTER))]
+StudentUser = Annotated[User, Depends(require_roles(Role.STUDENT))]
 AvailabilityUser = Annotated[
     User, Depends(require_roles(Role.STUDENT, Role.SUPERVISOR))
 ]
@@ -499,6 +503,42 @@ async def update_student(
     return student
 
 
+@router.get('/me/student', response_model=StudentRead)
+async def get_my_student_profile(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    current_user: StudentUser,
+) -> Student:
+    student = await session.get(Student, current_user.id)
+    if student is None:
+        raise ApiError(
+            409,
+            'PROFILE_REQUIRED',
+            'O perfil de estudante ainda nao foi criado.',
+        )
+    return student
+
+
+@router.patch('/me/student', response_model=StudentRead)
+async def update_my_student_profile(
+    payload: StudentProfileUpdate,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    current_user: StudentUser,
+) -> Student:
+    student = await session.get(Student, current_user.id)
+    if student is None:
+        raise ApiError(
+            409,
+            'PROFILE_REQUIRED',
+            'O perfil de estudante ainda nao foi criado.',
+        )
+    student.registration = payload.registration.strip()
+    student.full_name = payload.full_name.strip()
+    student.phone = payload.phone.strip() if payload.phone else None
+    await commit_or_duplicate(session)
+    await session.refresh(student)
+    return student
+
+
 @router.get('/supervisors', response_model=list[SupervisorRead])
 async def list_supervisors(
     session: Annotated[AsyncSession, Depends(get_db_session)],
@@ -787,3 +827,99 @@ async def replace_my_availability(
     return await availability_response(
         session, user=current_user, term_id=payload.term_id
     )
+
+
+async def load_managed_availability_target(
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    owner_type: str,
+) -> User:
+    user = await session.get(User, user_id)
+    if user is None or user.role != owner_type:
+        raise not_found('Perfil de disponibilidade')
+    profile_model = Student if owner_type == Role.STUDENT.value else Supervisor
+    if await session.get(profile_model, user_id) is None:
+        raise ApiError(
+            409,
+            'PROFILE_REQUIRED',
+            'O perfil academico precisa ser criado antes da disponibilidade.',
+        )
+    return user
+
+
+@router.get('/managed-availability', response_model=AvailabilityRead)
+async def get_managed_availability(
+    user_id: Annotated[UUID, Query()],
+    owner_type: Annotated[str, Query(pattern='^(STUDENT|SUPERVISOR)$')],
+    term_id: Annotated[UUID, Query()],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    _: MasterUser,
+) -> AvailabilityRead:
+    target = await load_managed_availability_target(
+        session, user_id=user_id, owner_type=owner_type
+    )
+    if await session.get(AcademicTerm, term_id) is None:
+        raise not_found('Semestre')
+    return await availability_response(session, user=target, term_id=term_id)
+
+
+@router.put('/managed-availability', response_model=AvailabilityRead)
+async def replace_managed_availability(
+    payload: ManagedAvailabilityUpdate,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    current_user: MasterUser,
+) -> AvailabilityRead:
+    target = await load_managed_availability_target(
+        session, user_id=payload.user_id, owner_type=payload.owner_type
+    )
+    term = await session.get(AcademicTerm, payload.term_id)
+    if term is None:
+        raise not_found('Semestre')
+    if term.status == TermStatus.CLOSED.value:
+        raise invalid_state(
+            'Nao e possivel editar disponibilidade de semestre fechado.'
+        )
+    ensure_intervals_are_valid(payload.intervals)
+
+    if payload.owner_type == Role.STUDENT.value:
+        model = StudentAvailability
+        owner_column = StudentAvailability.student_id
+        owner_field = 'student_id'
+        target_type = 'student_availability'
+    else:
+        model = SupervisorAvailability
+        owner_column = SupervisorAvailability.supervisor_id
+        owner_field = 'supervisor_id'
+        target_type = 'supervisor_availability'
+
+    await session.execute(
+        delete(model).where(
+            owner_column == target.id,
+            model.term_id == payload.term_id,
+        )
+    )
+    for interval in payload.intervals:
+        session.add(
+            model(
+                **{
+                    owner_field: target.id,
+                    'term_id': payload.term_id,
+                    'weekday': interval.weekday,
+                    'start_time': interval.start_time,
+                    'end_time': interval.end_time,
+                    'time_zone': interval.time_zone,
+                }
+            )
+        )
+    session.add(
+        AuditEvent(
+            actor_user_id=current_user.id,
+            action='AVAILABILITY_UPDATED',
+            target_type=target_type,
+            target_id=target.id,
+            metadata_json={'term_id': str(payload.term_id)},
+        )
+    )
+    await session.commit()
+    return await availability_response(session, user=target, term_id=payload.term_id)

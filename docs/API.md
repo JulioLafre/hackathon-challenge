@@ -36,6 +36,7 @@ Codigo de erro administrativo: SELF_DEACTIVATION_FORBIDDEN.
 | GET | `/me` | Interno | Perfil e permissoes atuais |
 | GET | `/me/academic-terms` | Estudante/Supervisor | Listar semestres editaveis |
 | GET/PUT | `/me/availability` | Estudante/Supervisor | Gerir disponibilidade do semestre |
+| GET/PUT | `/managed-availability` | Master | Gerir disponibilidade de estudante ou supervisor selecionado |
 
 `POST /auth/login` recebe `email` e `password`. Falha usa mensagem unica, sem
 revelar se o e-mail existe.
@@ -87,7 +88,7 @@ Rotas Master da configuracao academica:
 | GET/POST/PATCH | `/courses`, `/courses/{id}` | Configurar cursos; desativacao usa `/deactivate` |
 | GET/POST/PATCH | `/disciplines`, `/disciplines/{id}` | Configurar disciplinas e estagios |
 | GET/POST/PATCH | `/cohorts`, `/cohorts/{id}` | Configurar turma por curso, periodo e semestre |
-| GET/POST | `/class-blocks` | Criar bloqueios semanais da grade |
+| GET/POST | `/class-blocks` | Listar e criar bloqueios semanais da grade |
 | GET/POST/PATCH | `/students`, `/students/{user_id}` | Criar e editar perfil academico do estudante |
 | GET/POST/PATCH | `/supervisors`, `/supervisors/{user_id}` | Criar e editar perfil do supervisor |
 | GET/POST | `/student-academic-links` | Vincular estudante a turma e disciplina/estagio |
@@ -118,12 +119,19 @@ O payload de disponibilidade e:
 }
 ```
 
-Cada usuario so pode alterar o proprio perfil de disponibilidade. Sem perfil
+Estudantes e supervisores alteram somente o proprio perfil de disponibilidade.
+O Master usa `GET/PUT /managed-availability` informando `user_id`,
+`owner_type` e `term_id` para manter o perfil selecionado. Sem perfil
 academico criado pelo Master, a API retorna `409 PROFILE_REQUIRED`.
+
+O estudante consulta e atualiza somente os campos do proprio perfil por
+`GET/PATCH /me/student`; e-mail, papel e acesso continuam administrativos.
+Essa rota de autoatendimento nao faz parte das rotas Master acima.
 
 Rotas Master adicionais:
 
-- CRUD `/users`;
+- GET `/users` e POST `/users/{id}/activate` ou `/users/{id}/deactivate` para
+  consultar e alternar acessos sem apagar historico;
 - configuracao de clinicas e recursos conforme a tabela abaixo.
 
 | Metodo | Rota | Finalidade |
@@ -185,6 +193,10 @@ o requisito exige validade, o campo e obrigatorio. `POST .../reject` exige
 `review_note` nao vazia. Uma submissao fora da propriedade do estudante ou do
 escopo ativo do revisor responde `404 NOT_FOUND`, sem confirmar metadados.
 
+A fila de revisao inclui `expires_required` para que a interface sinalize
+quando a data de validade precisa ser informada. O dono do documento pode
+baixar o ultimo arquivo submetido pela mesma rota privada de conteudo.
+
 ## Sessoes e alocacoes
 
 | Metodo | Rota | Acesso | Finalidade |
@@ -194,6 +206,7 @@ escopo ativo do revisor responde `404 NOT_FOUND`, sem confirmar metadados.
 | POST | `/sessions/{id}/publish` | Supervisor no escopo/Master | Validar e gerar horarios |
 | POST | `/sessions/{id}/cancel` | Supervisor no escopo/Master | Cancelar com tratamento de reservas |
 | GET | `/sessions/{id}/capacity` | Interno | Explicar cada parcela da capacidade |
+| GET | `/sessions/{id}/allocations` | Supervisor no escopo/Master | Consultar estudantes alocados |
 | POST | `/sessions/{id}/allocations` | Estudante proprio/Master | Alocar estudante |
 | DELETE | `/sessions/{id}/allocations/{allocation_id}` | Estudante proprio/Master | Cancelar alocacao |
 | GET | `/me/session-options` | Supervisor | Listar configuracoes autorizadas com nomes para criar sessoes |
@@ -223,6 +236,10 @@ entrada do estudante e sessoes futuras `DRAFT`/`PUBLISHED` em que ele ja esta
 alocado. Cada item traz os nomes legiveis do contexto e `can_join`,
 `allocation_id`, `allocation_status`, `blocked_code` e `blocked_message`.
 Elegibilidade e compatibilidade sao avaliadas no servidor.
+
+`GET /sessions/{id}/allocations` retorna somente alocacoes ativas ou
+suspensas, com nome, matricula, situacao e motivo de suspensao. A mesma
+checagem de escopo usada nas demais operacoes de sessao e aplicada.
 
 POST /sessions/{id}/publish calcula a capacidade no servidor e gera slots com
 a duracao do servico. Sobra menor que a duracao nao vira slot; repetir a
@@ -255,6 +272,10 @@ original com `200`, sem novo consumo e sem repetir o codigo. Consulta, criacao e
 gestao por codigo possuem limites em memoria e respondem `429 PUBLIC_RATE_LIMITED`
 com `Retry-After`.
 
+A interface publica tambem permite informar o identificador e o codigo de gestao
+em uma nova visita para confirmar ou cancelar uma reserva existente; ela reutiliza
+as rotas publicas de gestao e nao cria uma consulta adicional de dados pessoais.
+
 ## Administracao
 
 - `GET /admin/dashboard?term_id=`: contagens de pendencias, sessoes e agenda;
@@ -262,7 +283,9 @@ com `Retry-After`.
   auditoria e sem permitir auto-desativacao;
 - `GET /admin/appointments/at-risk`: fila paginada de reservas em risco com
   sessao, horario, causa operacional e sem contato da comunidade;
-- `GET /audit-events`: consulta paginada por ator, acao, alvo e periodo;
+- `GET /audit-events`: consulta paginada por ator, acao, alvo e periodo
+  usando `actor_user_id`, `action`, `target_type`, `from`, `to`,
+  `page` e `page_size`;
 - `GET /health/live`: processo vivo;
 - `GET /health/ready`: banco e storage disponiveis.
 

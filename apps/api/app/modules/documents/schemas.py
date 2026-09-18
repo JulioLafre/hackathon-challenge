@@ -64,6 +64,7 @@ class DocumentReviewRead(DocumentSubmissionRead):
     student_name: str
     requirement_name: str
     discipline_id: UUID | None
+    expires_required: bool
 
 
 class DocumentApproveRequest(BaseModel):

@@ -39,6 +39,16 @@ type Session = {
   capacity_explanation: CapacityExplanation | null
 }
 
+type SessionParticipant = {
+  id: string
+  session_id: string
+  student_id: string
+  registration: string
+  student_name: string
+  status: 'ACTIVE' | 'SUSPENDED' | string
+  suspended_reason: string | null
+}
+
 type SupervisorSessionOption = {
   id: string
   supervisor_id: string
@@ -141,6 +151,10 @@ function formatDateTime(value: string): string {
 
 function formatStatus(status: SessionStatus): string {
   return statusLabels[status] ?? status
+}
+
+function formatAllocationStatus(status: SessionParticipant['status']): string {
+  return status === 'SUSPENDED' ? 'Suspensa' : 'Ativa'
 }
 
 function statusClass(status: SessionStatus): string {
@@ -282,6 +296,17 @@ function SchedulingContent({ token }: AuthenticatedProps) {
       queryKey: ['session-capacity', token, session.id],
       queryFn: () =>
         apiFetch<CapacityExplanation>(token, `/sessions/${session.id}/capacity`),
+      retry: false,
+    })),
+  })
+  const participantQueries = useQueries({
+    queries: sessions.map((session) => ({
+      queryKey: ['session-participants', token, session.id],
+      queryFn: () =>
+        apiFetch<SessionParticipant[]>(
+          token,
+          `/sessions/${session.id}/allocations`,
+        ),
       retry: false,
     })),
   })
@@ -581,6 +606,7 @@ function SchedulingContent({ token }: AuthenticatedProps) {
                 {sessions.map((session, index) => {
                   const capacityQuery = capacityQueries[index]
                   const capacity = capacityQuery.data ?? session.capacity_explanation
+                  const participantQuery = participantQueries[index]
                   const context = options.find(
                     (option) =>
                       option.term_id === session.term_id &&
@@ -631,6 +657,44 @@ function SchedulingContent({ token }: AuthenticatedProps) {
                           {capacity && <CapacityExplanationView capacity={capacity} sessionId={session.id} />}
                           {!capacityQuery?.isPending && !capacityQuery?.isError && !capacity && (
                             <p className='field-help'>A API ainda não retornou uma explicação de capacidade.</p>
+                          )}
+                        </div>
+
+                        <div className='form-divider'>
+                          <div className='card-heading'>
+                            <div>
+                              <p className='eyebrow'>Participantes</p>
+                              <h3 id={`participants-title-${session.id}`}>Estudantes alocados</h3>
+                            </div>
+                            {participantQuery?.data && (
+                              <span className='card-count'>{participantQuery.data.length}</span>
+                            )}
+                          </div>
+                          {participantQuery?.isPending && (
+                            <p className='loading-message' role='status'>Carregando estudantes...</p>
+                          )}
+                          {participantQuery?.isError && (
+                            <p className='form-error' role='alert'>
+                              {errorMessage(participantQuery.error, 'Nao foi possivel consultar os estudantes desta sessao.')}
+                            </p>
+                          )}
+                          {!participantQuery?.isPending && !participantQuery?.isError && participantQuery?.data?.length === 0 && (
+                            <p className='field-help'>Nenhum estudante alocado nesta sessao.</p>
+                          )}
+                          {!participantQuery?.isPending && !participantQuery?.isError && participantQuery?.data && participantQuery.data.length > 0 && (
+                            <ul className='resource-list' aria-labelledby={`participants-title-${session.id}`}>
+                              {participantQuery.data.map((participant) => (
+                                <li key={participant.id}>
+                                  <span>
+                                    <strong>{participant.student_name}</strong>
+                                    <small>{participant.registration}{participant.suspended_reason ? ` - ${participant.suspended_reason}` : ''}</small>
+                                  </span>
+                                  <span className={`status-pill ${participant.status === 'ACTIVE' ? 'status-active' : 'document-status-pending_review'}`}>
+                                    {formatAllocationStatus(participant.status)}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
                           )}
                         </div>
 

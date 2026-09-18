@@ -36,6 +36,7 @@ from app.modules.scheduling.schemas import (
     SessionAllocationRead,
     SessionCancelRead,
     SessionCreate,
+    SessionParticipantRead,
     SessionPublishRead,
     SessionRead,
     SessionUpdate,
@@ -590,6 +591,51 @@ async def cancel_session(
     await commit_or_duplicate(session)
     await session.refresh(clinical_session)
     return SessionCancelRead.model_validate(clinical_session)
+
+
+@router.get(
+    '/sessions/{session_id}/allocations',
+    response_model=list[SessionParticipantRead],
+)
+async def list_session_allocations(
+    session_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    current_user: SessionOperator,
+) -> list[SessionParticipantRead]:
+    clinical_session = await load_session(session, session_id)
+    await ensure_scope(session, current_user, clinical_session)
+    rows = (
+        await session.execute(
+            select(SessionAllocation, Student)
+            .join(Student, Student.user_id == SessionAllocation.student_id)
+            .where(
+                SessionAllocation.session_id == clinical_session.id,
+                SessionAllocation.status.in_(
+                    [
+                        SessionAllocationStatus.ACTIVE.value,
+                        SessionAllocationStatus.SUSPENDED.value,
+                    ]
+                ),
+            )
+            .order_by(
+                Student.full_name,
+                Student.registration,
+                SessionAllocation.id,
+            )
+        )
+    ).all()
+    return [
+        SessionParticipantRead(
+            id=allocation.id,
+            session_id=allocation.session_id,
+            student_id=allocation.student_id,
+            registration=student.registration,
+            student_name=student.full_name,
+            status=allocation.status,
+            suspended_reason=allocation.suspended_reason,
+        )
+        for allocation, student in rows
+    ]
 
 
 @router.post(

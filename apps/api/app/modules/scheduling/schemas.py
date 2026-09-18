@@ -130,6 +130,16 @@ class SessionAllocationRead(BaseModel):
     suspended_reason: str | None
 
 
+class SessionParticipantRead(BaseModel):
+    id: UUID
+    session_id: UUID
+    student_id: UUID
+    registration: str
+    student_name: str
+    status: str
+    suspended_reason: str | None
+
+
 class CapacityRead(BaseModel):
     effective: int
     constraints: dict[str, int]

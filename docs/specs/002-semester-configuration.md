@@ -73,3 +73,11 @@ rotas administrativas de `docs/API.md`.
 
 Nenhuma bloqueante. Feriados podem ser representados por ausencia/cancelamento
 de sessoes no MVP.
+
+## Decisao de interface - disponibilidade administrativa
+
+O Master gerencia a disponibilidade de estudantes e supervisores selecionando
+o perfil e o semestre em uma tela administrativa. O backend reutiliza as tabelas
+de disponibilidade existentes, valida os mesmos intervalos e bloqueia edicao de
+semestre fechado. O Master nao possui uma disponibilidade operacional propria:
+o papel administrativo mantem os perfis que participam das sessoes.

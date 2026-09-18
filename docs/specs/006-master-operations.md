@@ -74,3 +74,10 @@ interface interna.
 
 Substituicao de estudante pode ser manual no banco de demo inicialmente, mas nao
 deve ser apresentada como fluxo completo ate existir endpoint/interface.
+
+## Decisao de interface - consulta de auditoria
+
+A tela de auditoria oferece filtros por ator, acao, alvo e intervalo de datas,
+alem de pagina��o configuravel. A listagem de atores usa somente o perfil
+administrativo retornado por `GET /users`; nenhum dado de documento, contato
+publico ou arquivo entra no filtro ou na resposta de auditoria.

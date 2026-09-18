@@ -112,3 +112,6 @@ posterior.
   supervisor.
 - A consulta continua retornando somente slots publicados e com capacidade;
   a reserva revalida a vaga dentro da transacao, como ja definido nesta spec.
+- A pagina publica tambem apresenta um formulario de gestao por identificador e
+  codigo, permitindo confirmar ou cancelar uma reserva depois de recarregar ou
+  retornar em uma nova visita. O codigo nao e persistido pelo frontend.

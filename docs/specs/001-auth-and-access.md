@@ -76,3 +76,10 @@ descrita em `docs/SECURITY_AND_LGPD.md`.
 ## Questoes em aberto
 
 Nenhuma para o MVP. Recuperacao de acesso sera operada pelo Master na demo.
+
+## Decisao de interface - perfil proprio do estudante
+
+O estudante possui `GET/PATCH /me/student` para manter nome, matricula e
+telefone do proprio perfil. A API usa o papel autenticado e o proprio
+`current_user.id`; e-mail, papel, status de acesso e demais dados de conta
+continuam fora do autoatendimento.

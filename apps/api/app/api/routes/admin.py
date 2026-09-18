@@ -216,6 +216,15 @@ async def get_dashboard(
     )
 
 
+@router.get('/users', response_model=list[UserProfile])
+async def list_users(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    _: MasterUser,
+) -> list[User]:
+    result = await session.scalars(select(User).order_by(User.email))
+    return list(result)
+
+
 @router.post('/users/{user_id}/deactivate', response_model=UserProfile)
 async def deactivate_user(
     user_id: UUID,
@@ -242,6 +251,34 @@ async def deactivate_user(
                 metadata_json={
                     'role': user.role,
                     'is_active': False,
+                },
+            )
+        )
+        await session.commit()
+        await session.refresh(user)
+    return user
+
+
+@router.post('/users/{user_id}/activate', response_model=UserProfile)
+async def activate_user(
+    user_id: UUID,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    current_user: MasterUser,
+) -> User:
+    user = await session.get(User, user_id)
+    if user is None:
+        raise ApiError(404, 'NOT_FOUND', 'Usuario nao encontrado.')
+    if not user.is_active:
+        user.is_active = True
+        session.add(
+            AuditEvent(
+                actor_user_id=current_user.id,
+                action='USER_ACTIVATED',
+                target_type='user',
+                target_id=user.id,
+                metadata_json={
+                    'role': user.role,
+                    'is_active': True,
                 },
             )
         )

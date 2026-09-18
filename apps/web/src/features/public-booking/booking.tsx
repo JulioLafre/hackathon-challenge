@@ -109,6 +109,8 @@ export function PublicBookingPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [managementAppointmentId, setManagementAppointmentId] = useState('')
+  const [managementCode, setManagementCode] = useState('')
   const [consent, setConsent] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -206,6 +208,34 @@ export function PublicBookingPage() {
     }
   }
 
+  async function manageExisting(action: 'confirm' | 'cancel') {
+    const appointmentId = managementAppointmentId.trim()
+    const code = managementCode.trim()
+    if (!appointmentId || !code) {
+      setError('Informe o identificador e o codigo de gestao da reserva.')
+      return
+    }
+    setError(null)
+    setIsSubmitting(true)
+    try {
+      const result = await publicApiFetch<Booking>(
+        '/public/appointments/' + action,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            appointment_id: appointmentId,
+            management_code: code,
+          }),
+        },
+      )
+      setBooking({ ...result, management_code: code })
+    } catch (requestError) {
+      setError(errorText(requestError))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   const today = localDateKey(new Date())
 
   return (
@@ -234,6 +264,9 @@ export function PublicBookingPage() {
             <p className='booking-summary'>
               {booking.service_name} · {booking.clinic_name}<br />
               {formatSlot(booking)}
+            </p>
+            <p className='field-help'>
+              Identificador da reserva: <strong>{booking.id}</strong>
             </p>
             <p className='field-help'>
               Guarde este codigo. Ele aparece uma vez e permite confirmar ou
@@ -307,6 +340,7 @@ export function PublicBookingPage() {
             </form>
           </section>
         ) : (
+          <>
           <section aria-labelledby='booking-search-title'>
             <p className='eyebrow'>01 · Escolha</p>
             <h2 id='booking-search-title'>Escolha um horário disponível.</h2>
@@ -358,6 +392,51 @@ export function PublicBookingPage() {
               <p className='field-help' role='status'>Nenhum horário com vaga para esses filtros. Tente outra combinação ou atualize a lista.</p>
             )}
           </section>
+          <section className='booking-management-panel' aria-labelledby='booking-management-title'>
+            <p className='eyebrow'>Gerenciar reserva</p>
+            <h2 id='booking-management-title'>Ja fez uma reserva?</h2>
+            <p className='field-help'>
+              Informe o identificador e o codigo exibidos quando a reserva foi criada para confirmar ou cancelar o horario.
+            </p>
+            <form
+              className='compact-form'
+              onSubmit={(event) => {
+                event.preventDefault()
+                void manageExisting('confirm')
+              }}
+              autoComplete='off'
+            >
+              <label htmlFor='management-appointment-id'>Identificador da reserva</label>
+              <input
+                id='management-appointment-id'
+                value={managementAppointmentId}
+                onChange={(event) => setManagementAppointmentId(event.target.value)}
+                required
+              />
+              <label htmlFor='management-code'>Codigo de gestao</label>
+              <input
+                id='management-code'
+                type='password'
+                value={managementCode}
+                onChange={(event) => setManagementCode(event.target.value)}
+                required
+              />
+              <div className='resource-actions'>
+                <button className='button button-primary' type='submit' disabled={isSubmitting}>
+                  Confirmar horario
+                </button>
+                <button
+                  className='button button-secondary'
+                  type='button'
+                  disabled={isSubmitting}
+                  onClick={() => void manageExisting('cancel')}
+                >
+                  Cancelar reserva
+                </button>
+              </div>
+            </form>
+          </section>
+          </>
         )}
       </main>
     </div>
