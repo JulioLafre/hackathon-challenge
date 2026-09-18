@@ -196,6 +196,8 @@ escopo ativo do revisor responde `404 NOT_FOUND`, sem confirmar metadados.
 | GET | `/sessions/{id}/capacity` | Interno | Explicar cada parcela da capacidade |
 | POST | `/sessions/{id}/allocations` | Estudante proprio/Master | Alocar estudante |
 | DELETE | `/sessions/{id}/allocations/{allocation_id}` | Estudante proprio/Master | Cancelar alocacao |
+| GET | `/me/session-options` | Supervisor | Listar configuracoes autorizadas com nomes para criar sessoes |
+| GET | `/me/available-sessions` | Estudante | Listar sessoes proprias e oportunidades com motivo de bloqueio |
 
 A explicacao de capacidade retorna `effective`, o mapa `constraints` com
 `eligible_students`, `supervision`, `rooms`, `equipment` e
@@ -211,6 +213,17 @@ Master; o estudante usa o proprio ID. A API valida documentos, semestre,
 curso/disciplina, disponibilidade, bloqueios academicos e limites antes do
 commit. Falhas retornam codigo estavel sem criar alocacao parcial.
 
+`GET /me/session-options` retorna as configuracoes ativas do escopo do
+supervisor, com nomes de semestre, servico, clinica e ambiente, duracao do
+servico e limite efetivo configurado. O cliente envia os UUIDs dessa opcao ao
+criar ou editar uma sessao; a pessoa nao precisa digita-los.
+
+`GET /me/available-sessions` retorna sessoes futuras `DRAFT` compativeis para
+entrada do estudante e sessoes futuras `DRAFT`/`PUBLISHED` em que ele ja esta
+alocado. Cada item traz os nomes legiveis do contexto e `can_join`,
+`allocation_id`, `allocation_status`, `blocked_code` e `blocked_message`.
+Elegibilidade e compatibilidade sao avaliadas no servidor.
+
 POST /sessions/{id}/publish calcula a capacidade no servidor e gera slots com
 a duracao do servico. Sobra menor que a duracao nao vira slot; repetir a
 publicacao devolve a mesma quantidade materializada. GET /sessions/{id}/capacity
@@ -221,7 +234,7 @@ nao delega calculo ao frontend e informa todos os fatores e os gargalos.
 | Metodo | Rota | Finalidade |
 | --- | --- | --- |
 | GET | `/public/services` | Servicos ativos sem dados internos |
-| GET | `/public/slots?service_id=&from=&to=&clinic_id=` | Horarios com vaga |
+| GET | `/public/slots?service_id=&from=&to=&clinic_id=` | Horarios com vaga; `service_id` e opcional |
 | POST | `/public/appointments` | Reservar com `Idempotency-Key` |
 | POST | `/public/appointments/confirm` | Confirmar por codigo |
 | POST | `/public/appointments/cancel` | Cancelar por codigo |
@@ -230,6 +243,11 @@ A criacao recebe `slot_id`, `name`, `email`, `phone` e
 `privacy_notice_version`. A resposta retorna identificador, estado, servico,
 clinica, horario e o codigo de gestao uma unica vez. Nunca retorna estudante,
 supervisor, hash ou dados de outras reservas.
+
+Quando `service_id` nao e informado, `/public/slots` busca todos os servicos
+ativos dentro do intervalo. O campo `service_id` de cada item identifica o
+servico daquele horario; os filtros de servico, unidade e data podem ser
+aplicados pela interface publica.
 
 Nome e pelo menos um contato sao obrigatorios. A versao do aviso deve coincidir
 com a configuracao vigente. Repetir a mesma `Idempotency-Key` devolve a reserva

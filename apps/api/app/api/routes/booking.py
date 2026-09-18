@@ -544,9 +544,9 @@ async def list_public_services(
 async def list_public_slots(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db_session)],
-    service_id: UUID,
     from_at: Annotated[datetime, Query(alias='from')],
     to_at: Annotated[datetime, Query(alias='to')],
+    service_id: UUID | None = None,
     clinic_id: UUID | None = None,
 ) -> list[PublicSlotRead]:
     _consume_limit(request, 'public_query_rate_limiter')
@@ -560,10 +560,24 @@ async def list_public_slots(
             'VALIDATION_ERROR',
             'O intervalo de consulta e invalido.',
         )
+    filters = [
+        ClinicalSession.status == ClinicalSessionStatus.PUBLISHED.value,
+        ClinicalService.is_active.is_(True),
+        Clinic.is_active.is_(True),
+        AppointmentSlot.starts_at > datetime.now(UTC),
+        AppointmentSlot.starts_at < to_at,
+        AppointmentSlot.ends_at > from_at,
+        AppointmentSlot.capacity_total > AppointmentSlot.reserved_count,
+    ]
+    if service_id is not None:
+        filters.append(ClinicalSession.service_id == service_id)
+    if clinic_id is not None:
+        filters.append(ClinicalSession.clinic_id == clinic_id)
     rows = (
         await session.execute(
             select(
                 AppointmentSlot,
+                ClinicalService.id,
                 ClinicalService.name,
                 ClinicalSession.clinic_id,
                 Clinic.name,
@@ -571,28 +585,14 @@ async def list_public_slots(
             .join(ClinicalSession, ClinicalSession.id == AppointmentSlot.session_id)
             .join(ClinicalService, ClinicalService.id == ClinicalSession.service_id)
             .join(Clinic, Clinic.id == ClinicalSession.clinic_id)
-            .where(
-                ClinicalSession.service_id == service_id,
-                ClinicalSession.status == ClinicalSessionStatus.PUBLISHED.value,
-                ClinicalService.is_active.is_(True),
-                Clinic.is_active.is_(True),
-                AppointmentSlot.starts_at > datetime.now(UTC),
-                AppointmentSlot.starts_at < to_at,
-                AppointmentSlot.ends_at > from_at,
-                AppointmentSlot.capacity_total > AppointmentSlot.reserved_count,
-                *(
-                    [ClinicalSession.clinic_id == clinic_id]
-                    if clinic_id is not None
-                    else []
-                ),
-            )
+            .where(*filters)
             .order_by(AppointmentSlot.starts_at, AppointmentSlot.id)
         )
     ).all()
     return [
         PublicSlotRead(
             id=slot.id,
-            service_id=service_id,
+            service_id=service_identifier,
             service_name=service_name,
             clinic_id=session_clinic_id,
             clinic_name=clinic_name,
@@ -600,5 +600,11 @@ async def list_public_slots(
             ends_at=slot.ends_at,
             capacity_available=max(0, slot.capacity_total - slot.reserved_count),
         )
-        for slot, service_name, session_clinic_id, clinic_name in rows
+        for (
+            slot,
+            service_identifier,
+            service_name,
+            session_clinic_id,
+            clinic_name,
+        ) in rows
     ]

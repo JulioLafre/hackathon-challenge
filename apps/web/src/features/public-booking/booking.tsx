@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { publicApiFetch } from '../../lib/api'
 
@@ -31,15 +31,59 @@ const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
   timeStyle: 'short',
   timeZone: 'America/Sao_Paulo',
 })
+const slotDateFormatter = new Intl.DateTimeFormat('pt-BR', {
+  weekday: 'short',
+  day: '2-digit',
+  month: 'short',
+  timeZone: 'America/Sao_Paulo',
+})
+const slotTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: 'America/Sao_Paulo',
+})
 
 function formatSlot(slot: Slot): string {
   return dateFormatter.format(new Date(slot.starts_at))
 }
 
-function dateRange(date: string): { from: string; to: string } {
-  const start = new Date(date + 'T00:00:00-03:00')
-  const end = new Date(date + 'T23:59:59-03:00')
-  return { from: start.toISOString(), to: end.toISOString() }
+function formatSlotDate(value: string): string {
+  return slotDateFormatter.format(new Date(value))
+}
+
+function formatSlotTime(value: string): string {
+  return slotTimeFormatter.format(new Date(value))
+}
+
+function localDateKey(value: Date | string): string {
+  const date = typeof value === 'string' ? new Date(value) : value
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+    .formatToParts(date)
+    .reduce<Record<string, string>>((result, item) => {
+      result[item.type] = item.value
+      return result
+    }, {})
+  return `${parts.year}-${parts.month}-${parts.day}`
+}
+
+function addLocalDays(value: string, days: number): string {
+  const date = new Date(`${value}T12:00:00-03:00`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return localDateKey(date)
+}
+
+function upcomingRange(): { from: string; to: string } {
+  const fromDate = localDateKey(new Date())
+  const toDate = addLocalDays(fromDate, 30)
+  return {
+    from: new Date(`${fromDate}T00:00:00-03:00`).toISOString(),
+    to: new Date(`${toDate}T23:59:59-03:00`).toISOString(),
+  }
 }
 
 function idempotencyKey(): string {
@@ -70,22 +114,30 @@ export function PublicBookingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let active = true
-    publicApiFetch<Service[]>('/public/services')
-      .then((result) => {
-        if (active) setServices(result)
-      })
-      .catch((requestError) => {
-        if (active) setError(errorText(requestError))
-      })
-      .finally(() => {
-        if (active) setIsLoading(false)
-      })
-    return () => {
-      active = false
+  const loadCatalog = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const range = upcomingRange()
+      const params = new URLSearchParams({ from: range.from, to: range.to })
+      const [nextServices, nextSlots] = await Promise.all([
+        publicApiFetch<Service[]>('/public/services'),
+        publicApiFetch<Slot[]>('/public/slots?' + params.toString()),
+      ])
+      setServices(nextServices)
+      setSlots(nextSlots)
+    } catch (requestError) {
+      setError(errorText(requestError))
+      setServices([])
+      setSlots([])
+    } finally {
+      setIsLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    void loadCatalog()
+  }, [loadCatalog])
 
   const clinics = useMemo(() => {
     const unique = new Map<string, string>()
@@ -93,34 +145,15 @@ export function PublicBookingPage() {
     return Array.from(unique, ([id, name]) => ({ id, name }))
   }, [slots])
 
-  async function searchSlots(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setError(null)
-    setSelectedSlot(null)
-    if (!serviceId || !date) {
-      setError('Selecione um servico e uma data.')
-      return
-    }
-    setIsLoading(true)
-    try {
-      const range = dateRange(date)
-      const params = new URLSearchParams({
-        service_id: serviceId,
-        from: range.from,
-        to: range.to,
-      })
-      if (clinicId) params.set('clinic_id', clinicId)
-      const result = await publicApiFetch<Slot[]>(
-        '/public/slots?' + params.toString(),
-      )
-      setSlots(result)
-    } catch (requestError) {
-      setError(errorText(requestError))
-      setSlots([])
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const filteredSlots = useMemo(
+    () => slots.filter((slot) => {
+      if (serviceId && slot.service_id !== serviceId) return false
+      if (clinicId && slot.clinic_id !== clinicId) return false
+      if (date && localDateKey(slot.starts_at) !== date) return false
+      return true
+    }),
+    [clinicId, date, serviceId, slots],
+  )
 
   async function submitBooking(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -173,7 +206,7 @@ export function PublicBookingPage() {
     }
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDateKey(new Date())
 
   return (
     <div className='public-booking-shell'>
@@ -253,15 +286,15 @@ export function PublicBookingPage() {
               {selectedSlot.service_name} · {selectedSlot.clinic_name}<br />
               {formatSlot(selectedSlot)}
             </p>
-            <form className='compact-form' onSubmit={submitBooking}>
+            <form className='compact-form' onSubmit={submitBooking} autoComplete='off'>
               <label htmlFor='booking-name'>Nome</label>
-              <input id='booking-name' value={name} onChange={(event) => setName(event.target.value)} required minLength={2} maxLength={160} />
+              <input id='booking-name' name='name' autoComplete='name' value={name} onChange={(event) => setName(event.target.value)} required minLength={2} maxLength={160} />
               <label htmlFor='booking-email'>E-mail (opcional)</label>
-              <input id='booking-email' type='email' value={email} onChange={(event) => setEmail(event.target.value)} />
+              <input id='booking-email' name='email' autoComplete='email' type='email' spellCheck={false} value={email} onChange={(event) => setEmail(event.target.value)} />
               <label htmlFor='booking-phone'>Telefone (opcional)</label>
-              <input id='booking-phone' type='tel' value={phone} onChange={(event) => setPhone(event.target.value)} />
+              <input id='booking-phone' name='phone' autoComplete='tel' type='tel' value={phone} onChange={(event) => setPhone(event.target.value)} />
               <label className='booking-consent'>
-                <input type='checkbox' checked={consent} onChange={(event) => setConsent(event.target.checked)} />
+                <input name='privacy_consent' type='checkbox' checked={consent} onChange={(event) => setConsent(event.target.checked)} />
                 <span>
                   Li o aviso de privacidade v{privacyVersion} e concordo com o uso
                   destes dados para gerir a reserva.
@@ -269,56 +302,60 @@ export function PublicBookingPage() {
               </label>
               <p className='field-help'>Nome e um contato bastam. Nao pedimos CPF, endereco ou informacao clinica.</p>
               <button className='button button-primary' type='submit' disabled={isSubmitting}>
-                {isSubmitting ? 'Reservando...' : 'Reservar horario'}
+                {isSubmitting ? 'Reservando…' : 'Reservar horario'}
               </button>
             </form>
           </section>
         ) : (
           <section aria-labelledby='booking-search-title'>
-            <p className='eyebrow'>01 · Buscar</p>
-            <h2 id='booking-search-title'>Quando voce quer ser atendido?</h2>
-            <form className='booking-search-form' onSubmit={searchSlots}>
+            <p className='eyebrow'>01 · Escolha</p>
+            <h2 id='booking-search-title'>Escolha um horário disponível.</h2>
+            <div className='booking-search-form'>
               <label htmlFor='booking-service'>Servico</label>
-              <select id='booking-service' value={serviceId} onChange={(event) => setServiceId(event.target.value)} required>
-                <option value=''>{isLoading ? 'Carregando servicos...' : 'Selecione um servico'}</option>
+              <select id='booking-service' name='service_id' value={serviceId} onChange={(event) => setServiceId(event.target.value)} disabled={isLoading}>
+                <option value=''>{isLoading ? 'Carregando servicos…' : 'Todos os servicos'}</option>
                 {services.map((service) => (
                   <option key={service.id} value={service.id}>
                     {service.name} · {service.duration_minutes} min
                   </option>
                 ))}
               </select>
-              <label htmlFor='booking-date'>Data</label>
-              <input id='booking-date' type='date' min={today} value={date} onChange={(event) => setDate(event.target.value)} required />
+              <label htmlFor='booking-date'>Data (opcional)</label>
+              <input id='booking-date' name='date' type='date' min={today} value={date} onChange={(event) => setDate(event.target.value)} disabled={isLoading} />
               {clinics.length > 0 && (
                 <>
                   <label htmlFor='booking-clinic'>Unidade (opcional)</label>
-                  <select id='booking-clinic' value={clinicId} onChange={(event) => setClinicId(event.target.value)}>
+                  <select id='booking-clinic' name='clinic_id' value={clinicId} onChange={(event) => setClinicId(event.target.value)} disabled={isLoading}>
                     <option value=''>Todas as unidades</option>
                     {clinics.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}
                   </select>
                 </>
               )}
-              <button className='button button-primary' type='submit' disabled={isLoading}>
-                {isLoading ? 'Consultando...' : 'Ver horarios'}
+              <button className='button button-secondary' type='button' onClick={() => void loadCatalog()} disabled={isLoading}>
+                {isLoading ? 'Atualizando…' : 'Atualizar horários'}
               </button>
-            </form>
-            {slots.length > 0 && (
-              <ul className='booking-slot-list' aria-label='Horarios disponiveis'>
-                {slots.map((slot) => (
-                  <li key={slot.id}>
-                    <div>
-                      <strong>{formatSlot(slot)}</strong>
-                      <span>{slot.clinic_name} · {slot.capacity_available} vaga{slot.capacity_available === 1 ? '' : 's'}</span>
-                    </div>
-                    <button className='button button-secondary' type='button' onClick={() => setSelectedSlot(slot)}>
-                      Escolher
-                    </button>
-                  </li>
+            </div>
+            {filteredSlots.length > 0 && (
+              <div className='booking-slot-grid' aria-label='Horários disponíveis'>
+                {filteredSlots.map((slot) => (
+                  <button
+                    className='booking-slot-card'
+                    key={slot.id}
+                    type='button'
+                    onClick={() => setSelectedSlot(slot)}
+                    aria-label={`Escolher ${slot.service_name} em ${formatSlotDate(slot.starts_at)} às ${formatSlotTime(slot.starts_at)}`}
+                  >
+                    <span className='booking-slot-card-time'>{formatSlotTime(slot.starts_at)}</span>
+                    <strong>{formatSlotDate(slot.starts_at)}</strong>
+                    <span>{slot.service_name}</span>
+                    <small>{slot.clinic_name} · {slot.capacity_available} vaga{slot.capacity_available === 1 ? '' : 's'}</small>
+                    <span className='booking-slot-card-action'>Escolher este horário <span aria-hidden='true'>→</span></span>
+                  </button>
                 ))}
-              </ul>
+              </div>
             )}
-            {!isLoading && serviceId && date && slots.length === 0 && (
-              <p className='field-help' role='status'>Nenhum horario com vaga nessa data. Tente outra combinacao.</p>
+            {!isLoading && filteredSlots.length === 0 && (
+              <p className='field-help' role='status'>Nenhum horário com vaga para esses filtros. Tente outra combinação ou atualize a lista.</p>
             )}
           </section>
         )}

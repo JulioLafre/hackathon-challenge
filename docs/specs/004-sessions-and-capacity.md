@@ -1,6 +1,6 @@
 # SPEC-004 - Sessoes, alocacoes e capacidade
 
-Status: READY
+Status: DOING
 
 ## Objetivo
 
@@ -94,3 +94,16 @@ capacidade e rotas `/sessions`.
 ## Questoes em aberto
 
 Nenhuma bloqueante para o MVP. Reservas de risco exigem decisao humana.
+
+## Decisao de interface - fluxo por papel
+
+- O supervisor consulta `GET /me/session-options` e escolhe uma configuracao
+  autorizada por nome de semestre, servico, clinica e ambiente. A interface nao
+  solicita UUIDs; os identificadores continuam somente no payload interno da
+  API.
+- O estudante consulta `GET /me/available-sessions`. A API devolve sessoes
+  proprias e oportunidades em rascunho com `can_join`, `blocked_code` e
+  `blocked_message`. A interface apenas representa esses motivos e usa as
+  rotas de alocacao/cancelamento existentes.
+- A API continua sendo a fonte de verdade para elegibilidade, compatibilidade,
+  disponibilidade e capacidade. A interface nao duplica essas regras.

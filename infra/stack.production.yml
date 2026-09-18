@@ -1,0 +1,129 @@
+# Stack Swarm para Portainer + Traefik.
+#
+# Defina as variáveis da stack no Portainer antes de fazer o deploy. A API faz
+# retry das migrations porque o Swarm não espera o healthcheck do PostgreSQL.
+
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16.4-alpine
+    networks:
+      - app_network
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-clinica_escola}
+      POSTGRES_USER: ${POSTGRES_USER:-clinica}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+    volumes:
+      - clinica_escola_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  api:
+    image: "ghcr.io/${GHCR_OWNER:?defina GHCR_OWNER}/clinica-escola-api:${IMAGE_TAG:-latest}"
+    networks:
+      - traefik_public
+      - app_network
+    environment:
+      TZ: America/Sao_Paulo
+      DATABASE_URL: ${DATABASE_URL:?defina DATABASE_URL usando o host db}
+      STORAGE_PATH: /app/storage
+      ENVIRONMENT: production
+      WEB_ORIGIN: "https://${WEB_HOST:-clinicaescola.forlium.com}"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?defina JWT_SECRET_KEY}
+      JWT_ISSUER: ${JWT_ISSUER:-clinica-escola-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-clinica-escola-web}
+      ACCESS_TOKEN_EXPIRES_MINUTES: ${ACCESS_TOKEN_EXPIRES_MINUTES:-30}
+      LOGIN_RATE_LIMIT_ATTEMPTS: ${LOGIN_RATE_LIMIT_ATTEMPTS:-5}
+      LOGIN_RATE_LIMIT_WINDOW_SECONDS: ${LOGIN_RATE_LIMIT_WINDOW_SECONDS:-900}
+      DEMO_MASTER_EMAIL: ${DEMO_MASTER_EMAIL:-master.demo@demo.clinicaescola.dev}
+      DEMO_MASTER_PASSWORD: ${DEMO_MASTER_PASSWORD:-MasterDemo!2026}
+      DEMO_SUPERVISOR_EMAIL: ${DEMO_SUPERVISOR_EMAIL:-supervisor.demo@demo.clinicaescola.dev}
+      DEMO_SUPERVISOR_PASSWORD: ${DEMO_SUPERVISOR_PASSWORD:-SupervisorDemo!2026}
+      DEMO_STUDENT_EMAIL: ${DEMO_STUDENT_EMAIL:-student.demo@demo.clinicaescola.dev}
+      DEMO_STUDENT_PASSWORD: ${DEMO_STUDENT_PASSWORD:-StudentDemo!2026}
+    volumes:
+      - clinica_escola_storage:/app/storage
+    command:
+      - sh
+      - -c
+      - |
+        attempt=0
+        until alembic upgrade head; do
+          attempt=$$((attempt + 1))
+          if [ "$$attempt" -ge 30 ]; then
+            echo "Não foi possível aplicar as migrations após 30 tentativas."
+            exit 1
+          fi
+          sleep 5
+        done
+        exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=traefik_public"
+        - "traefik.http.routers.clinicaescola-api-secure.rule=Host(`${API_HOST:-apiclinicaescola.forlium.com}`)"
+        - "traefik.http.routers.clinicaescola-api-secure.entrypoints=websecure"
+        - "traefik.http.routers.clinicaescola-api-secure.tls=true"
+        - "traefik.http.routers.clinicaescola-api-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.clinicaescola-api-secure.service=clinicaescola-api-service"
+        - "traefik.http.services.clinicaescola-api-service.loadbalancer.server.port=8000"
+
+  web:
+    image: "ghcr.io/${GHCR_OWNER:?defina GHCR_OWNER}/clinica-escola-web:${IMAGE_TAG:-latest}"
+    networks:
+      - traefik_public
+    environment:
+      TZ: America/Sao_Paulo
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=traefik_public"
+        - "traefik.http.routers.clinicaescola-web-secure.rule=Host(`${WEB_HOST:-clinicaescola.forlium.com}`)"
+        - "traefik.http.routers.clinicaescola-web-secure.entrypoints=websecure"
+        - "traefik.http.routers.clinicaescola-web-secure.tls=true"
+        - "traefik.http.routers.clinicaescola-web-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.clinicaescola-web-secure.service=clinicaescola-web-service"
+        - "traefik.http.services.clinicaescola-web-service.loadbalancer.server.port=80"
+
+volumes:
+  clinica_escola_db_data:
+  clinica_escola_storage:
+
+networks:
+  app_network:
+    external: true
+  traefik_public:
+    external: true

@@ -78,9 +78,15 @@ const roleJourneys: Record<UserRole, readonly JourneyStep[]> = {
       path: '/app/minha-disponibilidade',
     },
     {
+      id: 'sessions',
+      label: '3. Sessões disponíveis',
+      description: 'Escolha uma oportunidade compatível e acompanhe suas alocações.',
+      path: '/app/sessoes-disponiveis',
+    },
+    {
       id: 'journey',
-      label: '3. Jornada',
-      description: 'Acompanhe suas próximas oportunidades.',
+      label: '4. Resumo da jornada',
+      description: 'Revise o andamento completo da sua jornada.',
       path: '/app/minha-jornada',
     },
   ],
@@ -251,7 +257,11 @@ export function StudentJourneyPage() {
             </div>
             {index < steps.length - 1 ? (
               <Link className='text-link' to={step.path}>
-                {index === 0 ? 'Abrir documentos' : 'Informar disponibilidade'}
+                {index === 0
+                  ? 'Abrir documentos'
+                  : index === 1
+                    ? 'Informar disponibilidade'
+                    : 'Ver sessões disponíveis'}
                 <span aria-hidden='true'>→</span>
               </Link>
             ) : (

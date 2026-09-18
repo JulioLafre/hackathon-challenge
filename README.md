@@ -101,6 +101,51 @@ npm --prefix apps/web test -- --run
 npm --prefix apps/web run build
 ```
 
+## Publicar a demo na VPS
+
+O repositório também contém uma stack Swarm para Portainer em
+[`infra/stack.production.yml`](infra/stack.production.yml) e um workflow que
+publica as imagens no GHCR em
+`.github/workflows/publish-images.yml`. O build do frontend recebe a URL da API
+durante a compilação; portanto, `VITE_API_URL` não deve ser configurada apenas
+como `environment` no serviço já compilado.
+
+O padrão usado para esta apresentação é:
+
+- frontend: `clinicaescola.forlium.com`;
+- API: `apiclinicaescola.forlium.com`.
+
+Se preferir outro endereço para a API, altere `VITE_API_URL` no workflow e
+`API_HOST` na stack antes de publicar a imagem novamente.
+
+1. No Cloudflare, crie registros `A` para os dois hosts apontando para o IP da
+   VPS, com proxy habilitado, e confirme que a rede Docker `traefik_public` e a
+   rede externa `app_network` já existem.
+2. Faça push na branch `main`. O workflow publica
+   `ghcr.io/SEU_OWNER/clinica-escola-api` e
+   `ghcr.io/SEU_OWNER/clinica-escola-web` com as tags `latest` e `sha-*`.
+3. No Portainer, crie uma Stack usando `infra/stack.production.yml` e preencha
+   as variáveis do arquivo
+   [`infra/stack.production.env.example`](infra/stack.production.env.example).
+   `DATABASE_URL` deve usar `db` como host; `JWT_SECRET_KEY` e
+   `POSTGRES_PASSWORD` não devem usar os valores de exemplo.
+4. Se os pacotes do GHCR forem privados, cadastre `ghcr.io` no Portainer com
+   uma credencial que tenha somente leitura de pacotes. Se forem públicos, esse
+   passo não é necessário.
+5. Depois que a API estiver saudável, abra o console do container `api` no
+   Portainer e execute `seed-demo` uma vez. O seed é fictício e idempotente.
+
+Valide o deploy com:
+
+```bash
+curl https://apiclinicaescola.forlium.com/api/v1/health/live
+curl https://apiclinicaescola.forlium.com/api/v1/health/ready
+```
+
+Em uma atualização que reutilize `latest`, force a atualização da stack para o
+Swarm consultar a imagem novamente; para maior previsibilidade, use uma tag
+`sha-*` no campo `IMAGE_TAG`.
+
 ## Assistencia do Codex
 
 As skills versionadas ficam em `.agents/skills/`, com origens e hashes em

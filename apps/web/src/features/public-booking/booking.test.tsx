@@ -42,7 +42,7 @@ describe('public booking', () => {
     })
   })
 
-  it('busca um horario e envia uma reserva com chave idempotente', async () => {
+  it('exibe cards de horarios e envia uma reserva com chave idempotente', async () => {
     const user = userEvent.setup()
     render(
       <MemoryRouter>
@@ -50,13 +50,14 @@ describe('public booking', () => {
       </MemoryRouter>,
     )
 
-    await user.selectOptions(
-      await screen.findByLabelText('Servico'),
-      service.id,
-    )
-    await user.type(screen.getByLabelText('Data'), '2026-10-06')
-    await user.click(screen.getByRole('button', { name: 'Ver horarios' }))
-    await user.click(await screen.findByRole('button', { name: 'Escolher' }))
+    expect(await screen.findByRole('button', { name: /escolher/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ver horarios' })).not.toBeInTheDocument()
+    expect(
+      apiFetchMock.mock.calls.some(
+        ([path]) => path.startsWith('/public/slots?') && !path.includes('service_id='),
+      ),
+    ).toBe(true)
+    await user.click(screen.getByRole('button', { name: /escolher/i }))
 
     await user.type(screen.getByLabelText('Nome'), 'Pessoa Demo')
     await user.type(screen.getByLabelText('E-mail (opcional)'), 'demo@example.com')

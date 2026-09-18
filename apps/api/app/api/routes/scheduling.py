@@ -3,7 +3,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +23,7 @@ from app.db.models import (
     Role,
     SessionAllocation,
     SessionAllocationStatus,
+    Student,
     Supervisor,
     SupervisorServiceScope,
     User,
@@ -38,6 +39,8 @@ from app.modules.scheduling.schemas import (
     SessionPublishRead,
     SessionRead,
     SessionUpdate,
+    StudentSessionRead,
+    SupervisorSessionOptionRead,
 )
 from app.modules.scheduling.services import (
     calculate_capacity,
@@ -50,6 +53,8 @@ router = APIRouter(tags=['scheduling'])
 SessionOperator = Annotated[
     User, Depends(require_roles(Role.MASTER, Role.SUPERVISOR))
 ]
+SupervisorUser = Annotated[User, Depends(require_roles(Role.SUPERVISOR))]
+StudentUser = Annotated[User, Depends(require_roles(Role.STUDENT))]
 
 
 def not_found(resource: str) -> ApiError:
@@ -211,6 +216,205 @@ async def list_sessions(
     if current_user.role == Role.SUPERVISOR.value:
         query = query.where(ClinicalSession.supervisor_id == current_user.id)
     return list(await session.scalars(query))
+
+
+@router.get(
+    '/me/session-options',
+    response_model=list[SupervisorSessionOptionRead],
+)
+async def list_my_session_options(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    current_user: SupervisorUser,
+) -> list[SupervisorSessionOptionRead]:
+    rows = (
+        await session.execute(
+            select(
+                SupervisorServiceScope,
+                AcademicTerm,
+                ClinicalService,
+                Clinic,
+                Environment,
+                Supervisor,
+            )
+            .join(AcademicTerm, AcademicTerm.id == SupervisorServiceScope.term_id)
+            .join(
+                ClinicalService,
+                ClinicalService.id == SupervisorServiceScope.service_id,
+            )
+            .join(Environment, Environment.id == SupervisorServiceScope.environment_id)
+            .join(Clinic, Clinic.id == Environment.clinic_id)
+            .join(
+                Supervisor,
+                Supervisor.user_id == SupervisorServiceScope.supervisor_id,
+            )
+            .join(User, User.id == SupervisorServiceScope.supervisor_id)
+            .where(
+                SupervisorServiceScope.supervisor_id == current_user.id,
+                SupervisorServiceScope.is_active.is_(True),
+                AcademicTerm.status.in_(['DRAFT', 'ACTIVE']),
+                ClinicalService.is_active.is_(True),
+                Environment.is_active.is_(True),
+                Clinic.is_active.is_(True),
+                User.is_active.is_(True),
+            )
+            .order_by(
+                AcademicTerm.starts_on.desc(),
+                ClinicalService.name,
+                Clinic.name,
+                Environment.name,
+            )
+        )
+    ).all()
+    return [
+        SupervisorSessionOptionRead(
+            id=scope.id,
+            supervisor_id=scope.supervisor_id,
+            term_id=term.id,
+            term_name=term.name,
+            term_status=term.status,
+            term_starts_on=term.starts_on,
+            term_ends_on=term.ends_on,
+            service_id=service.id,
+            service_name=service.name,
+            duration_minutes=service.duration_minutes,
+            clinic_id=clinic.id,
+            clinic_name=clinic.name,
+            environment_id=environment.id,
+            environment_name=environment.name,
+            max_students_default=supervisor.max_students_default,
+            max_students_override=scope.max_students_override,
+        )
+        for scope, term, service, clinic, environment, supervisor in rows
+    ]
+
+
+@router.get(
+    '/me/available-sessions',
+    response_model=list[StudentSessionRead],
+)
+async def list_my_available_sessions(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    current_user: StudentUser,
+) -> list[StudentSessionRead]:
+    now = datetime.now(UTC)
+    rows = (
+        await session.execute(
+            select(
+                ClinicalSession,
+                AcademicTerm,
+                ClinicalService,
+                Clinic,
+                Environment,
+                Supervisor,
+                SessionAllocation,
+            )
+            .join(AcademicTerm, AcademicTerm.id == ClinicalSession.term_id)
+            .join(ClinicalService, ClinicalService.id == ClinicalSession.service_id)
+            .join(Clinic, Clinic.id == ClinicalSession.clinic_id)
+            .join(Environment, Environment.id == ClinicalSession.environment_id)
+            .join(Supervisor, Supervisor.user_id == ClinicalSession.supervisor_id)
+            .outerjoin(
+                SessionAllocation,
+                and_(
+                    SessionAllocation.session_id == ClinicalSession.id,
+                    SessionAllocation.student_id == current_user.id,
+                    SessionAllocation.status.in_(
+                        [
+                            SessionAllocationStatus.ACTIVE.value,
+                            SessionAllocationStatus.SUSPENDED.value,
+                        ]
+                    ),
+                ),
+            )
+            .where(
+                ClinicalSession.starts_at > now,
+                ClinicalSession.status.in_(
+                    [
+                        ClinicalSessionStatus.DRAFT.value,
+                        ClinicalSessionStatus.PUBLISHED.value,
+                    ]
+                ),
+                AcademicTerm.status.in_(['DRAFT', 'ACTIVE']),
+                ClinicalService.is_active.is_(True),
+                Clinic.is_active.is_(True),
+                Environment.is_active.is_(True),
+            )
+            .order_by(ClinicalSession.starts_at, ClinicalSession.id)
+        )
+    ).all()
+
+    has_profile = await session.get(Student, current_user.id) is not None
+    eligibility = StudentEligibility()
+    result: list[StudentSessionRead] = []
+    for (
+        clinical_session,
+        term,
+        service,
+        clinic,
+        environment,
+        supervisor,
+        allocation,
+    ) in rows:
+        if (
+            allocation is None
+            and clinical_session.status != ClinicalSessionStatus.DRAFT.value
+        ):
+            continue
+
+        can_join = False
+        blocked_code: str | None = None
+        blocked_message: str | None = None
+        if allocation is None:
+            if not has_profile:
+                blocked_code = 'PROFILE_REQUIRED'
+                blocked_message = (
+                    'Seu perfil academico ainda precisa ser criado pelo Master.'
+                )
+            else:
+                try:
+                    await ensure_student_compatibility(
+                        session, clinical_session, current_user.id
+                    )
+                    await eligibility.ensure_eligible(
+                        session, current_user.id, clinical_session.term_id
+                    )
+                    can_join = True
+                except ApiError as error:
+                    blocked_code = error.code
+                    blocked_message = error.message
+        elif allocation.status == SessionAllocationStatus.SUSPENDED.value:
+            blocked_code = allocation.suspended_reason or 'DOCUMENTS_PENDING'
+            blocked_message = (
+                'Sua participacao esta suspensa. Revise os documentos pendentes '
+                'antes de continuar.'
+            )
+        else:
+            blocked_message = 'Voce ja esta inscrito nesta sessao.'
+
+        result.append(
+            StudentSessionRead(
+                id=clinical_session.id,
+                term_id=term.id,
+                term_name=term.name,
+                service_id=service.id,
+                service_name=service.name,
+                clinic_id=clinic.id,
+                clinic_name=clinic.name,
+                environment_id=environment.id,
+                environment_name=environment.name,
+                supervisor_id=supervisor.user_id,
+                supervisor_name=supervisor.full_name,
+                starts_at=clinical_session.starts_at,
+                ends_at=clinical_session.ends_at,
+                status=clinical_session.status,
+                allocation_id=allocation.id if allocation is not None else None,
+                allocation_status=allocation.status if allocation is not None else None,
+                can_join=can_join,
+                blocked_code=blocked_code,
+                blocked_message=blocked_message,
+            )
+        )
+    return result
 
 
 @router.post(

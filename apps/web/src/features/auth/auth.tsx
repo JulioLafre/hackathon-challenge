@@ -11,6 +11,7 @@ import { AcademicAdminPage, AvailabilityPage } from '../academics/academics'
 import { ClinicAdminPage } from '../clinics/clinics'
 import { StudentDocumentsPage, SupervisorDocumentsPage } from '../documents/documents'
 import { SchedulingPage } from '../scheduling/scheduling'
+import { StudentSessionsPage } from '../scheduling/student-sessions'
 import { AdminAuditPage, AdminDashboardPage } from '../admin/admin'
 import { RoleJourney, RoleStartPage, StudentJourneyPage } from '../journey/journey'
 
@@ -74,6 +75,7 @@ const roleNavigation: Record<UserRole, readonly NavigationItem[]> = {
   STUDENT: [
     { label: 'Documentos', path: '/app/documentos' },
     { label: 'Minha disponibilidade', path: '/app/minha-disponibilidade' },
+    { label: 'Sessões disponíveis', path: '/app/sessoes-disponiveis' },
     { label: 'Minha jornada', path: '/app/minha-jornada' },
   ],
 }
@@ -239,6 +241,8 @@ function PrivateShell() {
           ? <SupervisorDocumentsPage token={token} />
       : token && user.role === 'SUPERVISOR' && location.pathname === '/app/sessoes'
         ? <SchedulingPage token={token} />
+      : token && user.role === 'STUDENT' && location.pathname === '/app/sessoes-disponiveis'
+        ? <StudentSessionsPage token={token} />
       : token && user.role === 'STUDENT' && location.pathname === '/app/minha-jornada'
         ? <StudentJourneyPage />
       : token && user.role === 'MASTER' && location.pathname === '/app/auditoria'
@@ -252,8 +256,10 @@ function PrivateShell() {
       ? 'academic-page-title'
       : location.pathname === '/app/clinicas'
         ? 'clinic-page-title'
-        : location.pathname === '/app/sessoes'
-          ? 'scheduling-page-title'
+          : location.pathname === '/app/sessoes'
+            ? 'scheduling-page-title'
+          : location.pathname === '/app/sessoes-disponiveis'
+            ? 'student-sessions-page-title'
           : location.pathname === '/app/visao-geral'
             ? 'admin-page-title'
             : location.pathname === '/app/auditoria'

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -65,6 +65,47 @@ class SessionRead(BaseModel):
     max_students_override: int | None
     status: str
     capacity_explanation: dict[str, object] | None
+
+
+class SupervisorSessionOptionRead(BaseModel):
+    id: UUID
+    supervisor_id: UUID
+    term_id: UUID
+    term_name: str
+    term_status: str
+    term_starts_on: date
+    term_ends_on: date
+    service_id: UUID
+    service_name: str
+    duration_minutes: int
+    clinic_id: UUID
+    clinic_name: str
+    environment_id: UUID
+    environment_name: str
+    max_students_default: int
+    max_students_override: int | None
+
+
+class StudentSessionRead(BaseModel):
+    id: UUID
+    term_id: UUID
+    term_name: str
+    service_id: UUID
+    service_name: str
+    clinic_id: UUID
+    clinic_name: str
+    environment_id: UUID
+    environment_name: str
+    supervisor_id: UUID
+    supervisor_name: str
+    starts_at: datetime
+    ends_at: datetime
+    status: str
+    allocation_id: UUID | None
+    allocation_status: str | None
+    can_join: bool
+    blocked_code: str | None
+    blocked_message: str | None
 
 
 class SessionPublishRead(SessionRead):

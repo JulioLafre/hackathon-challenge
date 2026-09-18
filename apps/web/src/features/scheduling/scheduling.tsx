@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import {
   QueryClient,
   QueryClientProvider,
@@ -39,6 +39,25 @@ type Session = {
   capacity_explanation: CapacityExplanation | null
 }
 
+type SupervisorSessionOption = {
+  id: string
+  supervisor_id: string
+  term_id: string
+  term_name: string
+  term_status: string
+  term_starts_on: string
+  term_ends_on: string
+  service_id: string
+  service_name: string
+  duration_minutes: number
+  clinic_id: string
+  clinic_name: string
+  environment_id: string
+  environment_name: string
+  max_students_default: number
+  max_students_override: number | null
+}
+
 type SessionCreatePayload = {
   term_id: string
   service_id: string
@@ -51,11 +70,8 @@ type SessionCreatePayload = {
 }
 
 type SessionForm = {
-  term_id: string
-  service_id: string
-  clinic_id: string
-  environment_id: string
-  supervisor_id: string
+  option_id: string
+  session_date: string
   starts_at: string
   ends_at: string
   max_students_override: string
@@ -69,15 +85,20 @@ type ActionVariables = {
 }
 
 const initialForm: SessionForm = {
-  term_id: '',
-  service_id: '',
-  clinic_id: '',
-  environment_id: '',
-  supervisor_id: '',
+  option_id: '',
+  session_date: '',
   starts_at: '',
   ends_at: '',
   max_students_override: '',
 }
+
+const timeOptions = Array.from({ length: 48 }, (_, index) => {
+  const totalMinutes = index * 30
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
+})
+const startTimeOptions = timeOptions.slice(0, -1)
 
 const capacityFactors: readonly CapacityFactor[] = [
   'eligible_students',
@@ -128,9 +149,37 @@ function statusClass(status: SessionStatus): string {
   return 'status-closed'
 }
 
-function localDateTimeWithOffset(value: string): string {
-  if (!value || value.includes('+') || /Z$/i.test(value)) return value
-  return value.length === 16 ? `${value}:00-03:00` : value
+function localDateTimeWithOffset(date: string, time: string): string {
+  if (!date || !time) return ''
+  return `${date}T${time}:00-03:00`
+}
+
+function localInputPart(value: string, part: 'date' | 'time'): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+    .formatToParts(date)
+    .reduce<Record<string, string>>((result, item) => {
+      result[item.type] = item.value
+      return result
+    }, {})
+  if (part === 'date') return `${parts.year}-${parts.month}-${parts.day}`
+  return `${parts.hour}:${parts.minute}`
+}
+
+function optionLimit(option: SupervisorSessionOption): number {
+  return Math.min(
+    option.max_students_default,
+    option.max_students_override ?? option.max_students_default,
+  )
 }
 
 function errorCode(error: unknown): string | null {
@@ -205,9 +254,16 @@ function CapacityExplanationView({
 function SchedulingContent({ token }: AuthenticatedProps) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState<SessionForm>(initialForm)
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [pendingCancelId, setPendingCancelId] = useState<string | null>(null)
   const [operationError, setOperationError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+
+  const optionsQuery = useQuery({
+    queryKey: ['session-options', token],
+    queryFn: () => apiFetch<SupervisorSessionOption[]>(token, '/me/session-options'),
+    retry: false,
+  })
 
   const sessionsQuery = useQuery({
     queryKey: ['sessions', token],
@@ -215,7 +271,12 @@ function SchedulingContent({ token }: AuthenticatedProps) {
     retry: false,
   })
 
+  const options = optionsQuery.data ?? []
   const sessions = sessionsQuery.data ?? []
+  const selectedOption = useMemo(
+    () => options.find((option) => option.id === form.option_id) ?? null,
+    [form.option_id, options],
+  )
   const capacityQueries = useQueries({
     queries: sessions.map((session) => ({
       queryKey: ['session-capacity', token, session.id],
@@ -239,6 +300,22 @@ function SchedulingContent({ token }: AuthenticatedProps) {
     },
   })
 
+  const updateMutation = useMutation({
+    mutationFn: ({ sessionId, payload }: { sessionId: string; payload: SessionCreatePayload }) =>
+      apiFetch<Session>(token, `/sessions/${sessionId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: async () => {
+      setForm(initialForm)
+      setEditingSessionId(null)
+      setNotice('Rascunho atualizado.')
+      setOperationError(null)
+      await queryClient.invalidateQueries({ queryKey: ['sessions', token] })
+      await queryClient.invalidateQueries({ queryKey: ['session-capacity', token] })
+    },
+  })
+
   const actionMutation = useMutation({
     mutationFn: ({ sessionId, action }: ActionVariables) =>
       apiFetch<Session>(token, `/sessions/${sessionId}/${action}`, {
@@ -259,22 +336,71 @@ function SchedulingContent({ token }: AuthenticatedProps) {
     },
   })
 
+  function updateForm(changes: Partial<SessionForm>) {
+    setForm((current) => ({ ...current, ...changes }))
+  }
+
   function handleFormSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setOperationError(null)
     setNotice(null)
-    createMutation.mutate({
-      term_id: form.term_id.trim(),
-      service_id: form.service_id.trim(),
-      clinic_id: form.clinic_id.trim(),
-      environment_id: form.environment_id.trim(),
-      supervisor_id: form.supervisor_id.trim(),
-      starts_at: localDateTimeWithOffset(form.starts_at),
-      ends_at: localDateTimeWithOffset(form.ends_at),
-      max_students_override: form.max_students_override
+    if (!selectedOption) {
+      setOperationError('Selecione uma configuração autorizada.')
+      return
+    }
+    const payload: SessionCreatePayload = {
+      term_id: selectedOption.term_id,
+      service_id: selectedOption.service_id,
+      clinic_id: selectedOption.clinic_id,
+      environment_id: selectedOption.environment_id,
+      supervisor_id: selectedOption.supervisor_id,
+      starts_at: localDateTimeWithOffset(form.session_date, form.starts_at),
+      ends_at: localDateTimeWithOffset(form.session_date, form.ends_at),
+      max_students_override: form.max_students_override.trim()
         ? Number(form.max_students_override)
         : null,
+    }
+    if (!payload.starts_at || !payload.ends_at) {
+      setOperationError('Informe a data, o início e o fim da sessão.')
+      return
+    }
+    if (editingSessionId) {
+      updateMutation.mutate({ sessionId: editingSessionId, payload })
+    } else {
+      createMutation.mutate(payload)
+    }
+  }
+
+  function startEditing(session: Session) {
+    const matchingOption = options.find(
+      (option) =>
+        option.term_id === session.term_id &&
+        option.service_id === session.service_id &&
+        option.clinic_id === session.clinic_id &&
+        option.environment_id === session.environment_id &&
+        option.supervisor_id === session.supervisor_id,
+    )
+    if (!matchingOption) {
+      setOperationError('A configuração desta sessão não está mais disponível para edição.')
+      return
+    }
+    setEditingSessionId(session.id)
+    setForm({
+      option_id: matchingOption.id,
+      session_date: localInputPart(session.starts_at, 'date'),
+      starts_at: localInputPart(session.starts_at, 'time'),
+      ends_at: localInputPart(session.ends_at, 'time'),
+      max_students_override: session.max_students_override?.toString() ?? '',
     })
+    setNotice(null)
+    setOperationError(null)
+  }
+
+  function cancelEditing() {
+    setEditingSessionId(null)
+    setForm(initialForm)
+    setNotice(null)
+    setOperationError(null)
   }
 
   function handleAction(sessionId: string, action: SessionAction) {
@@ -283,8 +409,8 @@ function SchedulingContent({ token }: AuthenticatedProps) {
     actionMutation.mutate({ sessionId, action })
   }
 
-  const queryError = sessionsQuery.error
-  const mutationError = createMutation.error ?? actionMutation.error
+  const queryError = optionsQuery.error ?? sessionsQuery.error
+  const mutationError = createMutation.error ?? updateMutation.error ?? actionMutation.error
   const pageError = queryError ?? mutationError ?? operationError
 
   return (
@@ -314,90 +440,92 @@ function SchedulingContent({ token }: AuthenticatedProps) {
               </div>
             </div>
             <p className='field-help'>
-              Informe os identificadores UUID da configuração existente. A API valida escopo, recursos e disponibilidade.
+              Escolha uma configuração já autorizada. O servidor valida recursos,
+              disponibilidade e capacidade antes de salvar.
             </p>
             <form className='compact-form' onSubmit={handleFormSubmit} autoComplete='off'>
-              <label htmlFor='session-term-id'>ID do semestre</label>
-              <input
-                id='session-term-id'
-                name='term_id'
+              <label htmlFor='session-option'>Configuração autorizada</label>
+              <select
+                id='session-option'
+                name='option_id'
                 required
-                value={form.term_id}
-                onChange={(event) => setForm({ ...form, term_id: event.target.value })}
-                aria-describedby='session-ids-help'
-              />
-
-              <label htmlFor='session-service-id'>ID do serviço</label>
-              <input
-                id='session-service-id'
-                name='service_id'
-                required
-                value={form.service_id}
-                onChange={(event) => setForm({ ...form, service_id: event.target.value })}
-                aria-describedby='session-ids-help'
-              />
-
-              <label htmlFor='session-clinic-id'>ID da clínica</label>
-              <input
-                id='session-clinic-id'
-                name='clinic_id'
-                required
-                value={form.clinic_id}
-                onChange={(event) => setForm({ ...form, clinic_id: event.target.value })}
-                aria-describedby='session-ids-help'
-              />
-
-              <label htmlFor='session-environment-id'>ID do ambiente</label>
-              <input
-                id='session-environment-id'
-                name='environment_id'
-                required
-                value={form.environment_id}
-                onChange={(event) => setForm({ ...form, environment_id: event.target.value })}
-                aria-describedby='session-ids-help'
-              />
-
-              <label htmlFor='session-supervisor-id'>ID do supervisor</label>
-              <input
-                id='session-supervisor-id'
-                name='supervisor_id'
-                required
-                value={form.supervisor_id}
-                onChange={(event) => setForm({ ...form, supervisor_id: event.target.value })}
-                aria-describedby='session-ids-help'
-              />
-              <p id='session-ids-help' className='field-help'>
-                IDs são aceitos exatamente como definidos no contrato da API.
+                value={form.option_id}
+                onChange={(event) => updateForm({ option_id: event.target.value })}
+                disabled={optionsQuery.isPending || options.length === 0}
+                aria-describedby='session-options-help'
+              >
+                <option value=''>
+                  {optionsQuery.isPending
+                    ? 'Carregando configurações…'
+                    : 'Selecione serviço, clínica e semestre'}
+                </option>
+                {options.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.service_name} · {option.clinic_name} · {option.environment_name} · {option.term_name}
+                  </option>
+                ))}
+              </select>
+              <p id='session-options-help' className='field-help'>
+                Os nomes vêm do seu escopo de supervisão; nenhum UUID é necessário.
               </p>
+              {selectedOption && (
+                <p className='selection-summary'>
+                  {selectedOption.service_name} dura {selectedOption.duration_minutes} min · limite de até {optionLimit(selectedOption)} estudante{optionLimit(selectedOption) === 1 ? '' : 's'}.
+                </p>
+              )}
 
               <div className='form-grid'>
                 <div>
-                  <label htmlFor='session-starts-at'>Início</label>
+                  <label htmlFor='session-date'>Data da sessão</label>
                   <input
-                    id='session-starts-at'
-                    name='starts_at'
-                    type='datetime-local'
-                    step='60'
+                    id='session-date'
+                    name='session_date'
+                    type='date'
                     required
-                    value={form.starts_at}
-                    onChange={(event) => setForm({ ...form, starts_at: event.target.value })}
+                    value={form.session_date}
+                    onChange={(event) => updateForm({ session_date: event.target.value })}
                   />
                 </div>
                 <div>
+                  <label htmlFor='session-starts-at'>Início</label>
+                  <select
+                    id='session-starts-at'
+                    name='starts_at'
+                    required
+                    value={form.starts_at}
+                    onChange={(event) => {
+                      const startsAt = event.target.value
+                      updateForm({
+                        starts_at: startsAt,
+                        ends_at: form.ends_at && form.ends_at > startsAt ? form.ends_at : '',
+                      })
+                    }}
+                  >
+                    <option value=''>Selecione o início</option>
+                    {startTimeOptions.map((time) => <option key={time} value={time}>{time}</option>)}
+                  </select>
+                </div>
+                <div>
                   <label htmlFor='session-ends-at'>Fim</label>
-                  <input
+                  <select
                     id='session-ends-at'
                     name='ends_at'
-                    type='datetime-local'
-                    step='60'
                     required
                     value={form.ends_at}
-                    onChange={(event) => setForm({ ...form, ends_at: event.target.value })}
-                  />
+                    disabled={!form.starts_at}
+                    onChange={(event) => updateForm({ ends_at: event.target.value })}
+                  >
+                    <option value=''>
+                      {form.starts_at ? 'Selecione o fim' : 'Selecione o início primeiro'}
+                    </option>
+                    {timeOptions
+                      .filter((time) => time > form.starts_at)
+                      .map((time) => <option key={time} value={time}>{time}</option>)}
+                  </select>
                 </div>
               </div>
               <p className='field-help'>
-                Horários são enviados com o offset institucional de America/Sao_Paulo.
+                Escolha um intervalo que cubra sua disponibilidade. Horários usam o fuso America/Sao_Paulo.
               </p>
 
               <label htmlFor='session-max-students'>Limite opcional de estudantes</label>
@@ -409,14 +537,26 @@ function SchedulingContent({ token }: AuthenticatedProps) {
                 max='10000'
                 inputMode='numeric'
                 value={form.max_students_override}
-                onChange={(event) => setForm({ ...form, max_students_override: event.target.value })}
+                onChange={(event) => updateForm({ max_students_override: event.target.value })}
               />
               <p className='field-help'>Deixe vazio para usar o limite configurado no escopo do supervisor.</p>
 
-              <button className='button button-primary' type='submit' disabled={createMutation.isPending}>
-                {createMutation.isPending ? 'Criando…' : 'Criar sessão'}
+              <button
+                className='button button-primary'
+                type='submit'
+                disabled={createMutation.isPending || updateMutation.isPending || options.length === 0}
+              >
+                {createMutation.isPending ? 'Criando…' : updateMutation.isPending ? 'Salvando…' : editingSessionId ? 'Salvar alterações' : 'Criar sessão'}
               </button>
+              {editingSessionId && (
+                <button className='text-button' type='button' onClick={cancelEditing}>
+                  Cancelar edição
+                </button>
+              )}
             </form>
+            {!optionsQuery.isPending && !optionsQuery.isError && options.length === 0 && (
+              <p className='empty-state'>Nenhuma configuração disponível. Peça ao Master para liberar um escopo de supervisão.</p>
+            )}
           </article>
         </div>
 
@@ -441,6 +581,14 @@ function SchedulingContent({ token }: AuthenticatedProps) {
                 {sessions.map((session, index) => {
                   const capacityQuery = capacityQueries[index]
                   const capacity = capacityQuery.data ?? session.capacity_explanation
+                  const context = options.find(
+                    (option) =>
+                      option.term_id === session.term_id &&
+                      option.service_id === session.service_id &&
+                      option.clinic_id === session.clinic_id &&
+                      option.environment_id === session.environment_id &&
+                      option.supervisor_id === session.supervisor_id,
+                  )
                   const isPublishing =
                     actionMutation.isPending &&
                     actionMutation.variables?.sessionId === session.id &&
@@ -463,14 +611,12 @@ function SchedulingContent({ token }: AuthenticatedProps) {
                           </span>
                         </div>
                         <p className='field-help'>
-                          Até {formatDateTime(session.ends_at)} · ID <code>{session.id}</code>
+                          Até {formatDateTime(session.ends_at)}
                         </p>
                         <dl className='field-help'>
-                          <div><dt>Semestre</dt><dd><code>{session.term_id}</code></dd></div>
-                          <div><dt>Serviço</dt><dd><code>{session.service_id}</code></dd></div>
-                          <div><dt>Clínica</dt><dd><code>{session.clinic_id}</code></dd></div>
-                          <div><dt>Ambiente</dt><dd><code>{session.environment_id}</code></dd></div>
-                          <div><dt>Supervisor</dt><dd><code>{session.supervisor_id}</code></dd></div>
+                          <div><dt>Semestre</dt><dd>{context?.term_name ?? 'Configuração anterior'}</dd></div>
+                          <div><dt>Serviço</dt><dd>{context?.service_name ?? 'Serviço não disponível'}</dd></div>
+                          <div><dt>Local</dt><dd>{context ? `${context.clinic_name} · ${context.environment_name}` : 'Local não disponível'}</dd></div>
                         </dl>
 
                         <div className='form-divider'>
@@ -489,6 +635,16 @@ function SchedulingContent({ token }: AuthenticatedProps) {
                         </div>
 
                         <div className='resource-actions' aria-label={`Ações da sessão ${index + 1}`}>
+                          {session.status === 'DRAFT' && (
+                            <button
+                              className='button button-secondary'
+                              type='button'
+                              disabled={updateMutation.isPending || actionMutation.isPending}
+                              onClick={() => startEditing(session)}
+                            >
+                              Editar rascunho
+                            </button>
+                          )}
                           {session.status === 'DRAFT' && (
                             <button
                               className='button button-primary'

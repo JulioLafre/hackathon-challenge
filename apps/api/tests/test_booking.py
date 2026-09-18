@@ -118,6 +118,18 @@ async def test_public_catalog_only_returns_available_slots(
     assert 'student_id' not in slots.json()[0]
     assert 'supervisor_id' not in slots.json()[0]
 
+    all_slots = await booking_client.get(
+        '/api/v1/public/slots',
+        params={
+            'from': '2026-10-06T00:00:00Z',
+            'to': '2026-10-07T00:00:00Z',
+        },
+    )
+    assert all_slots.status_code == 200, all_slots.text
+    assert [item['service_id'] for item in all_slots.json()] == [
+        str(context['service_id'])
+    ]
+
 
 @pytest.mark.asyncio
 async def test_last_public_slot_is_serialized_under_concurrency(

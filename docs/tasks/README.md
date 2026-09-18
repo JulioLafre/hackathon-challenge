@@ -14,6 +14,7 @@ possuir codigo e validacao. O status so muda com evidencia.
 | 7 | [TASK-007](TASK-007-booking.md) | 006 | Comunidade reserva sem exceder limite | DONE |
 | 8 | [TASK-008](TASK-008-demo-hardening.md) | 007 | Painel, seed, seguranca e roteiro estaveis | DONE |
 | 9 | [TASK-009](TASK-009-faq-assistant.md) | 008 | Diferencial opcional isolado | OPTIONAL |
+| 10 | [TASK-010](TASK-010-role-experience.md) | 008 | Fluxos praticos de supervisor, estudante e comunidade | DONE |
 
 ## Regra de status
 

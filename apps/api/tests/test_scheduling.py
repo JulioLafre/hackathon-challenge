@@ -564,3 +564,68 @@ async def test_document_rejection_suspends_future_allocation(
         appointment = await db_session.get(Appointment, appointment_id)
         assert appointment is not None
         assert appointment.risk_status == 'AT_RISK'
+
+
+@pytest.mark.asyncio
+async def test_supervisor_session_options_return_human_readable_context(
+    scheduling_client: AsyncClient,
+) -> None:
+    context = await build_context(scheduling_client)
+
+    response = await scheduling_client.get(
+        '/api/v1/me/session-options',
+        headers=auth(context['supervisor_token']),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()[0] == {
+        'id': response.json()[0]['id'],
+        'supervisor_id': str(context['supervisor_id']),
+        'term_id': str(context['term_id']),
+        'term_name': 'Semestre de teste',
+        'term_status': 'ACTIVE',
+        'term_starts_on': '2026-08-01',
+        'term_ends_on': '2026-12-20',
+        'service_id': str(context['service_id']),
+        'service_name': 'Atendimento teste',
+        'duration_minutes': 60,
+        'clinic_id': str(context['clinic_id']),
+        'clinic_name': 'Clinica teste',
+        'environment_id': str(context['environment_id']),
+        'environment_name': 'Ambiente teste',
+        'max_students_default': 4,
+        'max_students_override': None,
+    }
+
+    student_token = await login(
+        scheduling_client,
+        'student.schedule.0@example.com',
+    )
+    forbidden = await scheduling_client.get(
+        '/api/v1/me/session-options', headers=auth(student_token)
+    )
+    assert forbidden.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_student_available_sessions_explain_document_block(
+    scheduling_client: AsyncClient,
+) -> None:
+    context = await build_context(scheduling_client, document_required=True)
+    await create_session(
+        scheduling_client, context['supervisor_token'], context
+    )
+    student_token = await login(
+        scheduling_client,
+        'student.schedule.0@example.com',
+    )
+
+    response = await scheduling_client.get(
+        '/api/v1/me/available-sessions', headers=auth(student_token)
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()[0]['service_name'] == 'Atendimento teste'
+    assert response.json()[0]['clinic_name'] == 'Clinica teste'
+    assert response.json()[0]['can_join'] is False
+    assert response.json()[0]['blocked_code'] == 'DOCUMENTS_PENDING'

@@ -45,12 +45,32 @@ const publishedSession = {
   slots_created: 2,
 }
 
+const sessionOption = {
+  id: 'scope-1',
+  supervisor_id: session.supervisor_id,
+  term_id: session.term_id,
+  term_name: '2026.2',
+  term_status: 'ACTIVE',
+  term_starts_on: '2026-08-01',
+  term_ends_on: '2026-12-20',
+  service_id: session.service_id,
+  service_name: 'Avaliação funcional',
+  duration_minutes: 60,
+  clinic_id: session.clinic_id,
+  clinic_name: 'Unidade Centro',
+  environment_id: session.environment_id,
+  environment_name: 'Sala de atendimento',
+  max_students_default: 4,
+  max_students_override: null,
+}
+
 function mockSchedulingApi(publishError?: Error) {
   apiFetchMock.mockImplementation(
     (async (requestToken: string, path: string) => {
       if (requestToken !== token) {
         throw new Error('Token de teste inesperado.')
       }
+      if (path === '/me/session-options') return [sessionOption]
       if (path === '/sessions') return [session]
       if (path === `/sessions/${sessionId}/capacity`) return capacity
       if (path === `/sessions/${sessionId}/publish`) {
@@ -110,5 +130,109 @@ describe('scheduling', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'A sessao nao possui capacidade efetiva positiva.',
     )
+  })
+
+  it('cria uma sessao escolhendo a configuracao por nomes, sem digitar UUID', async () => {
+    apiFetchMock.mockImplementation(
+      (async (requestToken: string, path: string, init?: RequestInit) => {
+        if (requestToken !== token) throw new Error('Token de teste inesperado.')
+        if (path === '/me/session-options') return [sessionOption]
+        if (path === '/sessions' && init?.method === 'POST') return session
+        if (path === '/sessions') return []
+        throw new Error(`Rota de teste inesperada: ${path}`)
+      }) as typeof apiFetch,
+    )
+
+    render(<SchedulingPage token={token} />)
+
+    const user = userEvent.setup()
+    await screen.findByRole('option', { name: /Avaliação funcional/ })
+    await user.selectOptions(
+      await screen.findByLabelText('Configuração autorizada'),
+      sessionOption.id,
+    )
+    await user.type(screen.getByLabelText('Data da sessão'), '2026-10-13')
+    await user.selectOptions(screen.getByLabelText('Início'), '08:00')
+    await user.selectOptions(screen.getByLabelText('Fim'), '09:00')
+    await user.click(screen.getByRole('button', { name: 'Criar sessão' }))
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        token,
+        '/sessions',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            term_id: session.term_id,
+            service_id: session.service_id,
+            clinic_id: session.clinic_id,
+            environment_id: session.environment_id,
+            supervisor_id: session.supervisor_id,
+            starts_at: '2026-10-13T08:00:00-03:00',
+            ends_at: '2026-10-13T09:00:00-03:00',
+            max_students_override: null,
+          }),
+        }),
+      )
+    })
+    expect(screen.queryByLabelText(/ID do semestre/i)).not.toBeInTheDocument()
+  })
+
+  it('informa quando nao consegue carregar as configuracoes autorizadas', async () => {
+    apiFetchMock.mockImplementation(
+      (async (requestToken: string, path: string) => {
+        if (requestToken !== token) throw new Error('Token de teste inesperado.')
+        if (path === '/me/session-options') throw new Error('Falha ao carregar configurações.')
+        if (path === '/sessions') return []
+        throw new Error(`Rota de teste inesperada: ${path}`)
+      }) as typeof apiFetch,
+    )
+
+    render(<SchedulingPage token={token} />)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Falha ao carregar configurações.',
+    )
+  })
+
+  it('edita um rascunho usando a mesma configuracao legivel', async () => {
+    apiFetchMock.mockImplementation(
+      (async (requestToken: string, path: string, init?: RequestInit) => {
+        if (requestToken !== token) throw new Error('Token de teste inesperado.')
+        if (path === '/me/session-options') return [sessionOption]
+        if (path === '/sessions' && init?.method === 'PATCH') return session
+        if (path === '/sessions') return [session]
+        if (path === `/sessions/${sessionId}/capacity`) return capacity
+        throw new Error(`Rota de teste inesperada: ${path}`)
+      }) as typeof apiFetch,
+    )
+
+    render(<SchedulingPage token={token} />)
+
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Editar rascunho' }))
+    await user.selectOptions(screen.getByLabelText('Início'), '08:30')
+    await user.selectOptions(screen.getByLabelText('Fim'), '09:30')
+    await user.click(screen.getByRole('button', { name: 'Salvar alterações' }))
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        token,
+        `/sessions/${sessionId}`,
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({
+            term_id: sessionOption.term_id,
+            service_id: sessionOption.service_id,
+            clinic_id: sessionOption.clinic_id,
+            environment_id: sessionOption.environment_id,
+            supervisor_id: sessionOption.supervisor_id,
+            starts_at: '2026-10-06T08:30:00-03:00',
+            ends_at: '2026-10-06T09:30:00-03:00',
+            max_students_override: null,
+          }),
+        }),
+      )
+    })
   })
 })

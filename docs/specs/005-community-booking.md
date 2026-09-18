@@ -1,6 +1,6 @@
 # SPEC-005 - Agendamento da comunidade
 
-Status: READY
+Status: DOING
 
 ## Objetivo
 
@@ -101,3 +101,14 @@ de privacidade.
 
 Na demo o codigo sera exibido na tela. Envio por e-mail/SMS e uma integracao
 posterior.
+
+## Decisao de interface - horarios em cards
+
+- `GET /public/slots` aceita `service_id` opcional. Sem esse filtro, a pagina
+  publica carrega os proximos horarios com vaga em uma consulta e permite
+  filtrar servico, unidade e data localmente.
+- A comunidade escolhe um horario em cards selecionaveis, com data, hora,
+  unidade e vagas restantes visiveis. Nao existe escolha de estudante ou
+  supervisor.
+- A consulta continua retornando somente slots publicados e com capacidade;
+  a reserva revalida a vaga dentro da transacao, como ja definido nesta spec.
